@@ -2,8 +2,11 @@
  * BottomNav - System-level interaction controller
  * 
  * Handles 2D navigation:
- * - Horizontal (X): Navigation between top-level pages
- * - Vertical (Y): Access to contextual actions via swipe up/down
+ * - Horizontal (X): Navigation between top-level pages via horizontal scroll
+ * - Vertical (Y): Row swap between main nav and contextual actions via swipe up/down
+ * 
+ * The nav has a FIXED height. Swipe up/down swaps which row is visible,
+ * NOT expanding like a drawer.
  * 
  * See docs/bottom-nav.md for full architecture documentation.
  */
@@ -14,13 +17,11 @@ import { Link, useLocation } from "wouter";
 import { useTotalUnreadCount } from "@/lib/selectors/conversation.selectors";
 import { useBottomNav } from "@/contexts/BottomNavContext";
 import { useRef, useCallback, useState } from "react";
-import { motion, AnimatePresence, useAnimation } from "framer-motion";
-import { ChevronUp, ChevronDown } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 // Constants for gesture detection
-const SWIPE_THRESHOLD = 0.25; // 25% of row height to commit
-const VELOCITY_THRESHOLD = 300; // px/s to commit regardless of distance
-const ROW_HEIGHT = 72; // Height of each row in pixels
+const SWIPE_THRESHOLD = 20; // pixels to commit swipe
+const ROW_HEIGHT = 72; // Height of nav row in pixels
 
 export default function BottomNav() {
     const [location] = useLocation();
@@ -29,9 +30,8 @@ export default function BottomNav() {
     
     // Gesture state
     const [isDragging, setIsDragging] = useState(false);
+    const [dragOffset, setDragOffset] = useState(0);
     const dragStartY = useRef(0);
-    const currentDragY = useRef(0);
-    const controls = useAnimation();
 
     const isActive = (p?: string) => {
         if (!p) return false;
@@ -47,24 +47,22 @@ export default function BottomNav() {
     const handlePointerDown = useCallback((e: React.PointerEvent) => {
         if (!hasContextualRow) return;
         
-        // Capture pointer for reliable tracking
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
         dragStartY.current = e.clientY;
-        currentDragY.current = 0;
         setIsDragging(true);
+        setDragOffset(0);
     }, [hasContextualRow]);
 
     // Handle pointer move - track drag distance
     const handlePointerMove = useCallback((e: React.PointerEvent) => {
         if (!isDragging) return;
         
-        const deltaY = e.clientY - dragStartY.current;
-        currentDragY.current = deltaY;
-        
-        // Apply visual feedback during drag
-        const clampedDelta = Math.max(-ROW_HEIGHT, Math.min(ROW_HEIGHT, deltaY));
-        controls.set({ y: clampedDelta * 0.3 }); // Elastic feel
-    }, [isDragging, controls]);
+        const deltaY = dragStartY.current - e.clientY; // Positive = swipe up
+        // Clamp the drag offset
+        const maxDrag = ROW_HEIGHT;
+        const clampedDelta = Math.max(-maxDrag, Math.min(maxDrag, deltaY));
+        setDragOffset(clampedDelta);
+    }, [isDragging]);
 
     // Handle pointer up - determine if swipe commits
     const handlePointerUp = useCallback((e: React.PointerEvent) => {
@@ -73,150 +71,144 @@ export default function BottomNav() {
         (e.target as HTMLElement).releasePointerCapture(e.pointerId);
         setIsDragging(false);
         
-        const deltaY = currentDragY.current;
-        const velocity = Math.abs(deltaY) / 0.2; // Approximate velocity
-        
         // Determine if swipe should commit
-        const shouldCommit = Math.abs(deltaY) > ROW_HEIGHT * SWIPE_THRESHOLD || velocity > VELOCITY_THRESHOLD;
-        
-        if (shouldCommit) {
-            if (deltaY < 0 && !isContextualVisible) {
-                // Swipe up - show contextual row
-                setContextualVisible(true);
-            } else if (deltaY > 0 && isContextualVisible) {
-                // Swipe down - hide contextual row
-                setContextualVisible(false);
-            }
+        if (dragOffset > SWIPE_THRESHOLD && !isContextualVisible) {
+            // Swipe up - show contextual row
+            setContextualVisible(true);
+        } else if (dragOffset < -SWIPE_THRESHOLD && isContextualVisible) {
+            // Swipe down - hide contextual row
+            setContextualVisible(false);
         }
         
-        // Reset position
-        controls.start({ y: 0, transition: { type: "spring", stiffness: 500, damping: 30 } });
-    }, [isDragging, isContextualVisible, setContextualVisible, controls]);
+        setDragOffset(0);
+    }, [isDragging, dragOffset, isContextualVisible, setContextualVisible]);
 
-    // Toggle contextual row via tap on indicator
-    const toggleContextualRow = useCallback(() => {
-        if (!hasContextualRow) return;
-        setContextualVisible(!isContextualVisible);
-    }, [hasContextualRow, isContextualVisible, setContextualVisible]);
+    // Calculate the visual offset during drag
+    const getRowTransform = () => {
+        if (isDragging) {
+            // During drag, show partial transition
+            const progress = dragOffset / ROW_HEIGHT;
+            if (isContextualVisible) {
+                // Currently showing contextual, dragging down would show main
+                return Math.min(0, progress) * ROW_HEIGHT;
+            } else {
+                // Currently showing main, dragging up would show contextual
+                return Math.max(0, -progress) * ROW_HEIGHT;
+            }
+        }
+        return isContextualVisible ? -ROW_HEIGHT : 0;
+    };
 
     return (
-        <motion.nav
+        <nav
             className="fixed bottom-0 inset-x-0 z-[50] select-none"
-            animate={controls}
-            style={{ touchAction: "none" }} // Prevent browser gestures
+            style={{ touchAction: "none" }}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp}
         >
-            {/* Safe area padding */}
+            {/* Container with fixed height and overflow hidden */}
             <div 
-                className="bg-slate-950/60 backdrop-blur-[32px] border-t border-white/10"
-                style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+                className="bg-slate-950/60 backdrop-blur-[32px] border-t border-white/10 overflow-hidden"
+                style={{ 
+                    height: ROW_HEIGHT,
+                    paddingBottom: "env(safe-area-inset-bottom)" 
+                }}
             >
-                {/* Swipe indicator - only show when contextual row is available */}
-                {hasContextualRow && (
+                {/* Row Container - slides up/down */}
+                <motion.div
+                    className="flex flex-col"
+                    animate={{ y: isContextualVisible ? -ROW_HEIGHT : 0 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 35 }}
+                    style={{ 
+                        y: isDragging ? getRowTransform() : undefined 
+                    }}
+                >
+                    {/* Row 0: Main Navigation */}
                     <div 
-                        className="flex justify-center py-1 cursor-pointer"
-                        onClick={toggleContextualRow}
+                        className="w-full overflow-x-auto snap-x snap-mandatory flex items-center no-scrollbar overscroll-x-contain shrink-0"
+                        style={{ height: ROW_HEIGHT }}
                     >
-                        <div className="flex flex-col items-center gap-0.5">
-                            <motion.div
-                                animate={{ opacity: isContextualVisible ? 0.3 : 1 }}
-                                className="text-white/50"
-                            >
-                                <ChevronUp className="w-4 h-4" />
-                            </motion.div>
-                            <div className="w-10 h-1 rounded-full bg-white/20" />
-                            <motion.div
-                                animate={{ opacity: isContextualVisible ? 1 : 0.3 }}
-                                className="text-white/50"
-                            >
-                                <ChevronDown className="w-4 h-4" />
-                            </motion.div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Contextual Row - slides in from bottom */}
-                <AnimatePresence>
-                    {isContextualVisible && contextualRow && (
-                        <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                            className="overflow-hidden border-b border-white/5"
-                        >
-                            <div className="w-full overflow-x-auto no-scrollbar">
-                                {contextualRow}
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
-                {/* Main Navigation Row */}
-                <div className="w-full overflow-x-auto snap-x snap-mandatory flex items-center no-scrollbar overscroll-x-contain h-[72px]">
-                    {navItems.map((item) => {
-                        const active = isActive(item.path);
-                        const ButtonContent = (
-                            <Button
-                                variant="ghost"
-                                className={cn(
-                                    "flex flex-col items-center justify-center gap-1.5 h-full w-full rounded-none hover:bg-white/5 transition-all relative snap-center shrink-0",
-                                    "min-w-[33.33vw] w-[33.33vw]",
-                                    active ? "text-white" : "text-white/40"
-                                )}
-                                onClick={item.action}
-                            >
-                                <div className="relative p-1">
-                                    <item.icon
-                                        className={cn(
-                                            "w-6 h-6 transition-all duration-300",
-                                            active
-                                                ? "text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]"
-                                                : "text-white/40 group-hover:text-white/70"
+                        {navItems.map((item) => {
+                            const active = isActive(item.path);
+                            const ButtonContent = (
+                                <Button
+                                    variant="ghost"
+                                    className={cn(
+                                        "flex flex-col items-center justify-center gap-1.5 h-full w-full rounded-none hover:bg-white/5 transition-all relative snap-center shrink-0",
+                                        "min-w-[33.33vw] w-[33.33vw]",
+                                        active ? "text-white" : "text-white/40"
+                                    )}
+                                    onClick={item.action}
+                                >
+                                    <div className="relative p-1">
+                                        <item.icon
+                                            className={cn(
+                                                "w-6 h-6 transition-all duration-300",
+                                                active
+                                                    ? "text-white scale-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]"
+                                                    : "text-white/40 group-hover:text-white/70"
+                                            )}
+                                            strokeWidth={active ? 2.5 : 2}
+                                        />
+                                        {item.id === "messages" && totalUnreadCount > 0 && (
+                                            <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm ring-2 ring-background">
+                                                {totalUnreadCount > 9 ? "9+" : totalUnreadCount}
+                                            </span>
                                         )}
-                                        strokeWidth={active ? 2.5 : 2}
-                                    />
-                                    {item.id === "messages" && totalUnreadCount > 0 && (
-                                        <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm ring-2 ring-background">
-                                            {totalUnreadCount > 9 ? "9+" : totalUnreadCount}
-                                        </span>
+                                        {item.badgeCount !== undefined && item.badgeCount > 0 && item.id !== "messages" && (
+                                            <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm ring-2 ring-background">
+                                                {item.badgeCount}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <span className={cn(
+                                        "text-[11px] font-medium tracking-wide transition-all duration-300",
+                                        active ? "text-white opacity-100" : "text-white/40 opacity-70"
+                                    )}>
+                                        {item.label}
+                                    </span>
+                                    {active && (
+                                        <div className="absolute bottom-2 w-1 h-1 rounded-full bg-white shadow-[0_0_8px_white]" />
                                     )}
-                                    {item.badgeCount !== undefined && item.badgeCount > 0 && item.id !== "messages" && (
-                                        <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm ring-2 ring-background">
-                                            {item.badgeCount}
-                                        </span>
-                                    )}
-                                </div>
-                                <span className={cn(
-                                    "text-[11px] font-medium tracking-wide transition-all duration-300",
-                                    active ? "text-white opacity-100" : "text-white/40 opacity-70"
-                                )}>
-                                    {item.label}
-                                </span>
-                                {active && (
-                                    <div className="absolute bottom-2 w-1 h-1 rounded-full bg-white shadow-[0_0_8px_white]" />
-                                )}
-                            </Button>
-                        );
-
-                        if (item.path) {
-                            return (
-                                <Link key={item.id} href={item.path} className="contents">
-                                    {ButtonContent}
-                                </Link>
+                                </Button>
                             );
-                        }
-                        return (
-                            <div key={item.id} className="contents">
-                                {ButtonContent}
+
+                            if (item.path) {
+                                return (
+                                    <Link key={item.id} href={item.path} className="contents">
+                                        {ButtonContent}
+                                    </Link>
+                                );
+                            }
+                            return (
+                                <div key={item.id} className="contents">
+                                    {ButtonContent}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Row 1: Contextual Actions */}
+                    <div 
+                        className="w-full overflow-x-auto no-scrollbar flex items-center shrink-0 border-t border-white/5"
+                        style={{ height: ROW_HEIGHT }}
+                    >
+                        {contextualRow || (
+                            <div className="flex items-center justify-center w-full h-full text-white/30 text-sm">
+                                No actions available
                             </div>
-                        );
-                    })}
-                </div>
+                        )}
+                    </div>
+                </motion.div>
             </div>
-        </motion.nav>
+
+            {/* Safe area spacer */}
+            <div 
+                className="bg-slate-950/60 backdrop-blur-[32px]"
+                style={{ height: "env(safe-area-inset-bottom)" }}
+            />
+        </nav>
     );
 }
