@@ -12,7 +12,7 @@ export const BottomNavRow = forwardRef<HTMLDivElement, BottomNavRowProps>(
             <motion.div
                 ref={ref}
                 className={cn(
-                    "flex items-center px-4 py-3 gap-2 w-max h-full touch-none",
+                    "flex items-center px-4 py-3 gap-2 w-max h-full",
                     className
                 )}
                 {...props}

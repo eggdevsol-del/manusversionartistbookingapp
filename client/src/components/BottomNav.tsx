@@ -191,16 +191,12 @@ export default function BottomNav() {
                         })}
                     </div>
 
-                    {/* Row 1: Contextual Actions */}
+                    {/* Row 1: Contextual Actions - horizontally scrollable like Row 0 */}
                     <div 
-                        className="w-full overflow-x-auto no-scrollbar flex items-center shrink-0 border-t border-white/5"
+                        className="w-full overflow-x-auto snap-x snap-mandatory no-scrollbar overscroll-x-contain flex items-center shrink-0 border-t border-white/5"
                         style={{ height: ROW_HEIGHT }}
                     >
-                        {contextualRow || (
-                            <div className="flex items-center justify-center w-full h-full text-white/30 text-sm">
-                                No actions available
-                            </div>
-                        )}
+                        {contextualRow}
                     </div>
                 </motion.div>
             </div>
