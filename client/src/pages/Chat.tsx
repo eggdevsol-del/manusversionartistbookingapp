@@ -2,7 +2,7 @@ import { ModalShell } from "@/components/ui/overlays/modal-shell";
 // import { SheetShell } from "@/components/ui/overlays/sheet-shell"; // REMOVED
 import { useChatController } from "@/features/chat/useChatController";
 import { Button } from "@/components/ui/button";
-import { BottomSheet, LoadingState } from "@/components/ui/ssot";
+import { BottomSheet, LoadingState, PageShell } from "@/components/ui/ssot";
 import { DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -163,7 +163,7 @@ export default function Chat() {
   }
 
   return (
-    <div className="fixed inset-0 flex flex-col overflow-hidden selection:bg-primary/20">
+    <PageShell className="selection:bg-primary/20">
 
       {/* Fixed Header & Consultation Pin */}
       <div className="flex-none z-50 bg-background/80 backdrop-blur-xl border-b border-white/5 shadow-sm supports-[backdrop-filter]:bg-background/60">
@@ -548,6 +548,6 @@ export default function Chat() {
         }}
         isPendingAction={bookProjectMutation.isPending}
       />
-    </div>
+    </PageShell>
   );
 }
