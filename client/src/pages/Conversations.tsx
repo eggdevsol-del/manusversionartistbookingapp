@@ -168,7 +168,7 @@ export default function Conversations() {
                     .map((consult) => (
                       <Card
                         key={consult.id}
-                        className="p-5 cursor-pointer transition-all duration-300 border-0 bg-gradient-to-r from-[#5b4eff]/20 to-[#5b4eff]/5 backdrop-blur-xl rounded-[2rem] relative group border border-white/10 hover:border-[#5b4eff]/30 shadow-lg"
+                        className="p-5 cursor-pointer transition-all duration-300 border-0 bg-gradient-to-r from-primary/20 to-primary/5 backdrop-blur-xl rounded-[2rem] relative group border border-white/10 hover:border-primary/30 shadow-lg"
                         onClick={async () => {
                           updateConsultationMutation.mutate({ id: consult.id, viewed: 1 });
                           try {
@@ -184,16 +184,16 @@ export default function Conversations() {
                           }
                         }}
                       >
-                        <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-r from-[#5b4eff]/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                        <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-r from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                         <div className="flex items-center justify-between relative z-10">
                           <div className="flex-1 min-w-0 pr-4">
                             <div className="flex items-center gap-2 mb-1.5">
-                              <span className="w-2 h-2 rounded-full bg-[#5b4eff] animate-pulse shadow-[0_0_8px_#5b4eff]" />
+                              <span className="w-2 h-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_hsl(var(--primary))]" />
                               <h3 className="font-bold text-white text-base truncate pr-2">{consult.subject} - {consult.client?.name || 'Client'}</h3>
                             </div>
                             <p className="text-sm text-white/60 line-clamp-2 leading-relaxed pl-4">{consult.description}</p>
                           </div>
-                          <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-[#5b4eff] group-hover:text-white transition-colors duration-300">
+                          <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-colors duration-300">
                             <ChevronRight className="w-4 h-4 text-white/40 group-hover:text-white" />
                           </div>
                         </div>
