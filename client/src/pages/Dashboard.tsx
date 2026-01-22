@@ -93,7 +93,7 @@ export default function Dashboard() {
         <PageShell>
             {/* 1. Page Header */}
             <PageHeader variant="transparent" className="justify-between mt-2">
-                <h1 className="text-xl font-bold text-foreground tracking-wide">Dashboard</h1>
+                <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
                 <div className="flex items-center gap-3">
                     {/* Settings Trigger - Matching reference right icon */}
                     <Button variant="ghost" size="icon" onClick={() => setShowSettingsSheet(true)} className="text-muted-foreground hover:text-foreground">
