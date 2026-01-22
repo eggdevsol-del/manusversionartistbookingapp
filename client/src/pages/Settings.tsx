@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { LoadingState } from "@/components/ui/ssot";
 import { trpc } from "@/lib/trpc";
 import {
   Bell,
@@ -168,11 +169,7 @@ export default function Settings() {
   };
 
   if (loading) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-background">
-        <div className="animate-pulse text-muted-foreground text-lg">Loading...</div>
-      </div>
-    );
+    return <LoadingState message="Loading..." fullScreen />;
   }
 
   const isArtist = user?.role === "artist" || user?.role === "admin";

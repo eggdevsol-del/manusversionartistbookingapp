@@ -17,7 +17,7 @@ import {
   ArrowLeft,
   Clock
 } from "lucide-react";
-import { BottomSheet } from "@/components/ui/ssot";
+import { BottomSheet, LoadingState } from "@/components/ui/ssot";
 import { DialogTitle } from "@/components/ui/dialog";
 
 import { useEffect, useState } from "react";
@@ -333,11 +333,7 @@ export default function Calendar() {
   };
 
   if (loading || isLoading) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-background">
-        <div className="animate-pulse text-primary text-lg">Loading calendar...</div>
-      </div>
-    );
+    return <LoadingState message="Loading calendar..." fullScreen />;
   }
 
   const isArtist = user?.role === "artist" || user?.role === "admin";

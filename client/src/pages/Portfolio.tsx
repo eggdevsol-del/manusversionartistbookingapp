@@ -6,6 +6,7 @@ import { BottomNavRow } from "@/components/BottomNavRow";
 import { Card, CardContent } from "@/components/ui/card";
 import { Heart, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LoadingState } from "@/components/ui/ssot";
 
 export default function Portfolio() {
     const { user } = useAuth();
@@ -34,7 +35,7 @@ export default function Portfolio() {
     const toggleLikeMutation = trpc.portfolio.toggleLike.useMutation();
 
     if (isLoading) {
-        return <div className="p-10 text-center animate-pulse">Loading gallery...</div>;
+        return <LoadingState message="Loading gallery..." fullScreen />;
     }
 
     return (

@@ -2,7 +2,7 @@ import { ModalShell } from "@/components/ui/overlays/modal-shell";
 // import { SheetShell } from "@/components/ui/overlays/sheet-shell"; // REMOVED
 import { useChatController } from "@/features/chat/useChatController";
 import { Button } from "@/components/ui/button";
-import { BottomSheet } from "@/components/ui/ssot";
+import { BottomSheet, LoadingState } from "@/components/ui/ssot";
 import { DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -145,11 +145,7 @@ export default function Chat() {
   };
 
   if (authLoading || convLoading || messagesLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-pulse text-primary text-lg">Loading...</div>
-      </div>
-    );
+    return <LoadingState message="Loading..." fullScreen />;
   }
 
   if (!conversation) {

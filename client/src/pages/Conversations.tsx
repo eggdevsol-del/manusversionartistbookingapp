@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Calendar, ChevronDown, ChevronRight, MessageCircle, User } from "lucide-react";
+import { LoadingState } from "@/components/ui/ssot";
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 
@@ -83,11 +84,7 @@ export default function Conversations() {
   }, [user]);
 
   if (loading || isLoading) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center bg-background">
-        <div className="animate-pulse text-muted-foreground text-lg">Loading messages...</div>
-      </div>
-    );
+    return <LoadingState message="Loading messages..." fullScreen />;
   }
 
   const isArtist = user?.role === "artist" || user?.role === "admin";
