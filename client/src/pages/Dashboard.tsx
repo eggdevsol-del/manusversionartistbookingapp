@@ -4,8 +4,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useDashboardTasks } from "@/features/dashboard/useDashboardTasks";
 import { CHALLENGE_TEMPLATES, DashboardTask } from "@/features/dashboard/DashboardTaskRegister";
-import { Dialog, DialogTitle } from "@/components/ui/dialog";
-import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { ActionSheet } from "@/components/ui/ssot";
+import { DialogTitle } from "@/components/ui/dialog";
 import { X, Check, Clock, ExternalLink, MessageSquare, Mail, Play, Plus, Trash2, Smartphone, Monitor } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -179,10 +179,7 @@ export default function Dashboard() {
 
 
             {/* --- ACTION SHEET --- */}
-            <Dialog open={showTaskSheet} onOpenChange={setShowTaskSheet}>
-                <DialogPrimitive.Portal>
-                    <DialogPrimitive.Overlay className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-                    <DialogPrimitive.Content className="fixed inset-x-0 bottom-0 z-[101] w-full bg-background/90 backdrop-blur-xl border-t border-white/10 rounded-t-[2rem] p-6 pb-12 shadow-2xl space-y-6 outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom duration-300">
+            <ActionSheet open={showTaskSheet} onOpenChange={setShowTaskSheet} title="Task Actions">
                         <div className="mx-auto w-12 h-1.5 rounded-full bg-white/20 mb-2" />
 
                         {selectedTask && (
@@ -252,15 +249,16 @@ export default function Dashboard() {
                                 </div>
                             </>
                         )}
-                    </DialogPrimitive.Content>
-                </DialogPrimitive.Portal>
-            </Dialog>
+            </ActionSheet>
 
             {/* --- CHALLENGE SHEET --- */}
-            <Dialog open={showChallengeSheet} onOpenChange={setShowChallengeSheet}>
-                <DialogPrimitive.Portal>
-                    <DialogPrimitive.Overlay className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-                    <DialogPrimitive.Content className="fixed inset-x-0 bottom-0 z-[101] max-h-[85vh] w-full bg-slate-950/95 backdrop-blur-xl border-t border-white/10 rounded-t-[2rem] p-0 shadow-2xl overflow-hidden flex flex-col outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom duration-300">
+            <ActionSheet 
+                open={showChallengeSheet} 
+                onOpenChange={setShowChallengeSheet} 
+                title="Select a Challenge"
+                maxHeight="85vh"
+                className="p-0 bg-slate-950/95"
+            >
                         <div className="px-6 py-4 border-b border-white/5 shrink-0">
                             <div className="mx-auto w-12 h-1.5 rounded-full bg-white/20 mb-4" />
                             <DialogTitle className="text-xl font-bold">Select a Challenge</DialogTitle>
@@ -292,15 +290,10 @@ export default function Dashboard() {
                                 </Card>
                             ))}
                         </div>
-                    </DialogPrimitive.Content>
-                </DialogPrimitive.Portal>
-            </Dialog>
+            </ActionSheet>
 
             {/* --- SETTINGS SHEET --- */}
-            <Dialog open={showSettingsSheet} onOpenChange={setShowSettingsSheet}>
-                <DialogPrimitive.Portal>
-                    <DialogPrimitive.Overlay className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-                    <DialogPrimitive.Content className="fixed inset-x-0 bottom-0 z-[101] w-full bg-background/90 backdrop-blur-xl border-t border-white/10 rounded-t-[2rem] p-6 pb-12 shadow-2xl space-y-6 outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom duration-300">
+            <ActionSheet open={showSettingsSheet} onOpenChange={setShowSettingsSheet} title="Preferences">
                         <div className="mx-auto w-12 h-1.5 rounded-full bg-white/20 mb-2" />
                         <div className="space-y-1">
                             <DialogTitle className="text-2xl font-bold">Preferences</DialogTitle>
@@ -328,9 +321,7 @@ export default function Dashboard() {
                                 </Select>
                             </div>
                         </div>
-                    </DialogPrimitive.Content>
-                </DialogPrimitive.Portal>
-            </Dialog>
+            </ActionSheet>
 
         </div>
     );

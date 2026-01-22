@@ -2,8 +2,8 @@ import { ModalShell } from "@/components/ui/overlays/modal-shell";
 // import { SheetShell } from "@/components/ui/overlays/sheet-shell"; // REMOVED
 import { useChatController } from "@/features/chat/useChatController";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogTitle } from "@/components/ui/dialog";
-import * as DialogPrimitive from "@radix-ui/react-dialog";
+import { BottomSheet } from "@/components/ui/ssot";
+import { DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -379,12 +379,11 @@ export default function Chat() {
       />
 
       {/* Book Now Calendar Sheet (Gold Standard) */}
-      <Dialog open={showBookingCalendar} onOpenChange={(open) => !open && setShowBookingCalendar(false)}>
-        <DialogPrimitive.Portal>
-          <DialogPrimitive.Overlay className="fixed inset-0 z-[100] bg-black/30 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-          <DialogPrimitive.Content
-            className="fixed inset-0 z-[101] w-full h-[100dvh] outline-none flex flex-col gap-0 overflow-hidden data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
-          >
+      <BottomSheet 
+        open={showBookingCalendar} 
+        onOpenChange={(open) => !open && setShowBookingCalendar(false)}
+        title="Select Date"
+      >
             {/* Standard Header */}
             <header className="px-4 py-4 z-10 shrink-0 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -489,10 +488,7 @@ export default function Chat() {
                 </div>
               </div>
             </div>
-          </DialogPrimitive.Content>
-        </DialogPrimitive.Portal>
-      </Dialog>
-
+      </BottomSheet>
 
       {/* Client Confirm Dialog */}
       <ModalShell
