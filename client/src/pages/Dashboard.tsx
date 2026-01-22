@@ -1,18 +1,37 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useDashboardTasks } from "@/features/dashboard/useDashboardTasks";
-import { CHALLENGE_TEMPLATES, DashboardTask } from "@/features/dashboard/DashboardTaskRegister";
-import { PageShell, PageHeader, GlassSheet, HalfSheet, FullScreenSheet } from "@/components/ui/ssot";
-import { X, Check, Clock, ExternalLink, MessageSquare, Mail, Play, Trash2, Smartphone, Monitor, ChevronRight } from "lucide-react";
+import { useBusinessTasks, useWeeklySnapshot, useDashboardSettings, type BusinessTask as ServerBusinessTask } from "@/features/dashboard/useBusinessTasks";
+import { CHALLENGE_TEMPLATES } from "@/features/dashboard/DashboardTaskRegister";
+import { DashboardTask, ChallengeTemplate } from "@/features/dashboard/types";
+import { PageShell, PageHeader, GlassSheet, HalfSheet, FullScreenSheet, WeeklySnapshotModal } from "@/components/ui/ssot";
+import { X, Check, Clock, ExternalLink, MessageSquare, Mail, Play, Trash2, Smartphone, Monitor, ChevronRight, Settings, BarChart3 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Card } from "@/components/ui/card"; // For Challenges only
+import { Card } from "@/components/ui/card";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 
 // SSOT Components
 import { SegmentedHeader } from "@/components/ui/ssot/SegmentedHeader";
 import { TaskCard } from "@/components/ui/ssot/TaskCard";
+
+// --- Types ---
+
+// Extended task type that can hold either legacy or server task data
+interface ExtendedTask {
+    id: string;
+    title: string;
+    context?: string;
+    priority: 'high' | 'medium' | 'low';
+    status: 'pending' | 'completed' | 'dismissed' | 'snoozed';
+    actionType: 'sms' | 'email' | 'social' | 'internal' | 'in_app' | 'link' | 'none';
+    actionPayload?: string;
+    domain: 'business' | 'social' | 'personal';
+    _serverTask?: ServerBusinessTask;
+}
 
 // --- Components ---
 
@@ -38,37 +57,165 @@ function EmptyState({ category, onAction }: { category: string; onAction?: () =>
     );
 }
 
+function LoadingState() {
+    return (
+        <div className="flex flex-col items-center justify-center p-8 text-center h-64">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
+            <p className="text-muted-foreground/50 text-sm">Loading tasks...</p>
+        </div>
+    );
+}
+
 const TITLES = ["Business", "Social", "Personal"];
 
 export default function Dashboard() {
+    const [, setLocation] = useLocation();
     const [activeIndex, setActiveIndex] = useState(0);
     const selectedDate = new Date();
 
-    // Feature Hook
-    const { tasks: allTasks, actions, stats, config } = useDashboardTasks();
+    // Legacy Feature Hook (for Social and Personal)
+    const { tasks: legacyTasks, actions: legacyActions, stats, config } = useDashboardTasks();
+
+    // New Business Tasks Hook (Revenue Protection Algorithm)
+    const { 
+        tasks: businessTasks, 
+        isLoading: businessLoading, 
+        settings: businessSettings,
+        actions: businessActions,
+        completingTask 
+    } = useBusinessTasks();
+
+    // Weekly Snapshot Hook
+    const { shouldShow: showSnapshot, snapshot, dismiss: dismissSnapshot } = useWeeklySnapshot();
+
+    // Dashboard Settings Hook
+    const { settings: dashboardSettings, updateSettings, isUpdating } = useDashboardSettings();
 
     // UI State
-    const [selectedTask, setSelectedTask] = useState<DashboardTask | null>(null);
+    const [selectedTask, setSelectedTask] = useState<ExtendedTask | null>(null);
     const [showTaskSheet, setShowTaskSheet] = useState(false);
     const [showChallengeSheet, setShowChallengeSheet] = useState(false);
     const [showSettingsSheet, setShowSettingsSheet] = useState(false);
+    const [showSnapshotModal, setShowSnapshotModal] = useState(false);
+    const [taskStartTime, setTaskStartTime] = useState<string | null>(null);
+
+    // Show weekly snapshot on mount if needed
+    useEffect(() => {
+        if (showSnapshot) {
+            setShowSnapshotModal(true);
+        }
+    }, [showSnapshot]);
 
     // Derived State
     const activeCategory = TITLES[activeIndex].toLowerCase() as 'business' | 'social' | 'personal';
-    const currentTasks = allTasks[activeCategory] || [];
+    
+    // Transform legacy task to ExtendedTask
+    const transformLegacyTask = (task: DashboardTask): ExtendedTask => ({
+        id: task.id,
+        title: task.title,
+        context: task.context,
+        priority: task.priority,
+        status: task.status,
+        actionType: task.actionType,
+        actionPayload: task.actionPayload,
+        domain: task.domain
+    });
+
+    // Get current tasks based on category
+    const getCurrentTasks = (): ExtendedTask[] => {
+        if (activeCategory === 'business') {
+            // Use server-generated business tasks
+            return businessTasks.map(task => ({
+                id: task.id,
+                title: task.title,
+                context: task.context,
+                priority: task.priority,
+                status: task.status as ExtendedTask['status'],
+                actionType: task.actionType as ExtendedTask['actionType'],
+                domain: 'business' as const,
+                _serverTask: task._original
+            } as ExtendedTask));
+        }
+        // Use legacy tasks for social and personal
+        const tasks = legacyTasks[activeCategory] || [];
+        return tasks.map(transformLegacyTask);
+    };
+
+    const currentTasks = getCurrentTasks();
 
     // Handlers
-    const handleTaskClick = (task: DashboardTask) => {
+    const handleTaskClick = (task: ExtendedTask) => {
         setSelectedTask(task);
+        
+        // Start tracking time for business tasks
+        if (task._serverTask) {
+            const startTime = businessActions.startTask(task._serverTask);
+            setTaskStartTime(startTime);
+        }
+        
         setShowTaskSheet(true);
     };
 
-    const executeAction = (task: DashboardTask) => {
-        const { actionType, actionPayload } = task;
-        if (actionType === 'email' && actionPayload) return actions.handleComms.email(actionPayload);
-        if (actionType === 'sms' && actionPayload) return actions.handleComms.sms(actionPayload);
-        if (actionType === 'social' && actionPayload) return window.open(actionPayload, '_blank');
-        if (actionPayload) console.log("Internal Nav:", actionPayload);
+    const executeAction = async (task: ExtendedTask) => {
+        const serverTask = task._serverTask;
+        
+        if (serverTask) {
+            // Handle server-generated business tasks
+            switch (serverTask.actionType) {
+                case 'sms':
+                    if (serverTask.smsNumber && serverTask.smsBody) {
+                        businessActions.openSms(serverTask);
+                    }
+                    break;
+                case 'email':
+                    if (serverTask.emailRecipient) {
+                        businessActions.openEmail(serverTask, businessSettings.preferredEmailClient);
+                    }
+                    break;
+                case 'in_app':
+                    if (serverTask.deepLink) {
+                        businessActions.navigateToTask(serverTask, setLocation);
+                    }
+                    break;
+                case 'external':
+                    // Handle external links if needed
+                    break;
+            }
+        } else {
+            // Handle legacy tasks
+            const { actionType, actionPayload } = task;
+            if (actionType === 'email' && actionPayload) return legacyActions.handleComms.email(actionPayload);
+            if (actionType === 'sms' && actionPayload) return legacyActions.handleComms.sms(actionPayload);
+            if (actionType === 'social' && actionPayload) return window.open(actionPayload, '_blank');
+            if (actionPayload) console.log("Internal Nav:", actionPayload);
+        }
+    };
+
+    const handleMarkDone = async (task: ExtendedTask) => {
+        if (task._serverTask) {
+            // Complete server task with tracking
+            await businessActions.completeTask(task._serverTask, 'manual');
+        } else {
+            // Legacy task completion
+            legacyActions.markDone(task.id);
+        }
+        setShowTaskSheet(false);
+    };
+
+    const handleSnooze = (task: ExtendedTask) => {
+        if (!task._serverTask) {
+            legacyActions.snooze(task.id);
+        }
+        // Note: Server tasks don't have snooze - they regenerate based on data
+        setShowTaskSheet(false);
+    };
+
+    const handleDismiss = (task: ExtendedTask) => {
+        if (!task._serverTask) {
+            legacyActions.dismiss(task.id);
+        }
+        // Note: Server tasks don't have dismiss - they regenerate based on data
+        setShowTaskSheet(false);
     };
 
     // Framer motion variants
@@ -143,20 +290,50 @@ export default function Dashboard() {
                             className="absolute top-0 left-0 w-full h-full px-4 pt-4 overflow-y-auto mobile-scroll touch-pan-y"
                         >
                             <div className="space-y-3 pb-32 max-w-lg mx-auto">
-                                {currentTasks.length > 0 ? (
+                                {/* Loading state for business tasks */}
+                                {activeCategory === 'business' && businessLoading ? (
+                                    <LoadingState />
+                                ) : currentTasks.length > 0 ? (
                                     currentTasks.map(task => (
                                         <TaskCard
                                             key={task.id}
                                             title={task.title}
                                             context={task.context}
-                                            priority={task.priority as 'high' | 'medium' | 'low'}
+                                            priority={task.priority}
                                             status={task.status}
                                             actionType={task.actionType as any}
                                             onClick={() => handleTaskClick(task)}
                                         />
                                     ))
                                 ) : (
-                                    <EmptyState category={TITLES[activeIndex]} onAction={activeCategory === 'personal' ? () => setShowChallengeSheet(true) : undefined} />
+                                    <EmptyState 
+                                        category={TITLES[activeIndex]} 
+                                        onAction={activeCategory === 'personal' ? () => setShowChallengeSheet(true) : undefined} 
+                                    />
+                                )}
+
+                                {/* Settings button at bottom of business tasks */}
+                                {activeCategory === 'business' && !businessLoading && (
+                                    <div className="pt-4 flex justify-center gap-3">
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="text-muted-foreground hover:text-foreground"
+                                            onClick={() => setShowSnapshotModal(true)}
+                                        >
+                                            <BarChart3 className="w-4 h-4 mr-2" />
+                                            Weekly Stats
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="text-muted-foreground hover:text-foreground"
+                                            onClick={() => setShowSettingsSheet(true)}
+                                        >
+                                            <Settings className="w-4 h-4 mr-2" />
+                                            Settings
+                                        </Button>
+                                    </div>
                                 )}
                             </div>
                         </motion.div>
@@ -184,8 +361,11 @@ export default function Dashboard() {
                                 {selectedTask.actionType === 'sms' && <MessageSquare className="mr-2 w-5 h-5" />}
                                 {selectedTask.actionType === 'email' && <Mail className="mr-2 w-5 h-5" />}
                                 {selectedTask.actionType === 'social' && <ExternalLink className="mr-2 w-5 h-5" />}
-                                {selectedTask.actionType === 'internal' && <Play className="mr-2 w-5 h-5" />}
-                                Execute Action
+                                {(selectedTask.actionType === 'internal' || selectedTask.actionType === 'in_app') && <Play className="mr-2 w-5 h-5" />}
+                                {selectedTask._serverTask?.actionType === 'sms' ? 'Send SMS' : 
+                                 selectedTask._serverTask?.actionType === 'email' ? 'Send Email' :
+                                 selectedTask._serverTask?.actionType === 'in_app' ? 'Open in App' :
+                                 'Execute Action'}
                             </Button>
                         )}
 
@@ -194,37 +374,41 @@ export default function Dashboard() {
                             variant="secondary"
                             size="lg"
                             className="w-full h-14 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5"
-                            onClick={() => { actions.markDone(selectedTask.id); setShowTaskSheet(false); }}
+                            onClick={() => handleMarkDone(selectedTask)}
+                            disabled={completingTask === `${selectedTask._serverTask?.taskType}-${selectedTask._serverTask?.relatedEntityId || 'none'}`}
                         >
                             <Check className="mr-2 w-5 h-5 text-green-500" />
                             Mark Completed
                         </Button>
 
-                        <div className="grid grid-cols-2 gap-3">
-                            <Button
-                                variant="outline"
-                                className="h-12 rounded-xl border-white/10 bg-transparent hover:bg-white/5"
-                                onClick={() => { actions.snooze(selectedTask.id); setShowTaskSheet(false); }}
-                            >
-                                <Clock className="mr-2 w-4 h-4" />
-                                Snooze 24h
-                            </Button>
-                            <Button
-                                variant="outline"
-                                className="h-12 rounded-xl border-white/10 bg-transparent hover:bg-white/5 text-muted-foreground"
-                                onClick={() => { actions.dismiss(selectedTask.id); setShowTaskSheet(false); }}
-                            >
-                                <X className="mr-2 w-4 h-4" />
-                                Dismiss
-                            </Button>
-                        </div>
+                        {/* Only show snooze/dismiss for non-server tasks */}
+                        {!selectedTask._serverTask && (
+                            <div className="grid grid-cols-2 gap-3">
+                                <Button
+                                    variant="outline"
+                                    className="h-12 rounded-xl border-white/10 bg-transparent hover:bg-white/5"
+                                    onClick={() => handleSnooze(selectedTask)}
+                                >
+                                    <Clock className="mr-2 w-4 h-4" />
+                                    Snooze 24h
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className="h-12 rounded-xl border-white/10 bg-transparent hover:bg-white/5 text-muted-foreground"
+                                    onClick={() => handleDismiss(selectedTask)}
+                                >
+                                    <X className="mr-2 w-4 h-4" />
+                                    Dismiss
+                                </Button>
+                            </div>
+                        )}
 
                         {/* Stop Challenge (Personal Only) */}
                         {selectedTask.domain === 'personal' && stats.activeChallengeId && (
                             <Button
                                 variant="ghost"
                                 className="w-full h-12 text-red-500 hover:text-red-400 hover:bg-red-500/10"
-                                onClick={() => { actions.stopChallenge(); setShowTaskSheet(false); }}
+                                onClick={() => { legacyActions.stopChallenge(); setShowTaskSheet(false); }}
                             >
                                 <Trash2 className="mr-2 w-4 h-4" />
                                 Stop Challenge
@@ -243,11 +427,11 @@ export default function Dashboard() {
                 contextSubtitle="Commit to a new personal growth goal."
             >
                 <div className="space-y-3">
-                    {CHALLENGE_TEMPLATES.map(template => (
+                    {CHALLENGE_TEMPLATES.map((template: ChallengeTemplate) => (
                         <Card
                             key={template.id}
                             onClick={() => {
-                                actions.startChallenge(template);
+                                legacyActions.startChallenge(template);
                                 setShowChallengeSheet(false);
                             }}
                             className="p-4 border-white/10 bg-white/5 hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer rounded-2xl flex items-center justify-between group"
@@ -273,13 +457,93 @@ export default function Dashboard() {
             <HalfSheet
                 open={showSettingsSheet}
                 onClose={() => setShowSettingsSheet(false)}
-                title="Preferences"
-                subtitle="Configure your dashboard experience."
+                title="Dashboard Settings"
+                subtitle="Configure your revenue protection dashboard."
             >
-                <div className="space-y-4">
+                <div className="space-y-6">
+                    {/* Max Visible Tasks */}
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <Label>Daily Task Limit</Label>
+                            <span className="text-sm font-medium">{dashboardSettings.maxVisibleTasks}</span>
+                        </div>
+                        <Slider
+                            value={[dashboardSettings.maxVisibleTasks]}
+                            onValueChange={([value]) => updateSettings({ maxVisibleTasks: value })}
+                            min={4}
+                            max={15}
+                            step={1}
+                            className="w-full"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            Number of tasks shown per day (4-15)
+                        </p>
+                    </div>
+
+                    {/* Goal Advanced Booking */}
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <Label>Booking Goal</Label>
+                            <span className="text-sm font-medium">{dashboardSettings.goalAdvancedBookingMonths} months</span>
+                        </div>
+                        <Slider
+                            value={[dashboardSettings.goalAdvancedBookingMonths]}
+                            onValueChange={([value]) => updateSettings({ goalAdvancedBookingMonths: value })}
+                            min={1}
+                            max={12}
+                            step={1}
+                            className="w-full"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            How far in advance you want to be booked
+                        </p>
+                    </div>
+
+                    {/* Email Client */}
                     <div className="space-y-2">
-                        <Label>Device Platform (For SMS/Sharing)</Label>
-                        <Select value={config.comms.platform} onValueChange={(val: any) => actions.setCommsPlatform(val)}>
+                        <Label>Preferred Email Client</Label>
+                        <Select 
+                            value={dashboardSettings.preferredEmailClient} 
+                            onValueChange={(val: 'default' | 'gmail' | 'outlook' | 'apple_mail') => updateSettings({ preferredEmailClient: val })}
+                        >
+                            <SelectTrigger className="h-12 bg-white/5 border-white/10 rounded-xl">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="default">
+                                    <div className="flex items-center gap-2"><Mail className="w-4 h-4" /> Default (mailto:)</div>
+                                </SelectItem>
+                                <SelectItem value="gmail">
+                                    <div className="flex items-center gap-2"><Mail className="w-4 h-4" /> Gmail</div>
+                                </SelectItem>
+                                <SelectItem value="outlook">
+                                    <div className="flex items-center gap-2"><Mail className="w-4 h-4" /> Outlook</div>
+                                </SelectItem>
+                                <SelectItem value="apple_mail">
+                                    <div className="flex items-center gap-2"><Mail className="w-4 h-4" /> Apple Mail</div>
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    {/* Weekly Snapshot Toggle */}
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <Label>Weekly Snapshot</Label>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                Show performance summary every Monday
+                            </p>
+                        </div>
+                        <Switch
+                            checked={dashboardSettings.showWeeklySnapshot}
+                            onCheckedChange={(checked) => updateSettings({ showWeeklySnapshot: checked })}
+                        />
+                    </div>
+
+                    {/* Device Platform (Legacy) */}
+                    <div className="space-y-2">
+                        <Label>Device Platform (For SMS)</Label>
+                        <Select value={config.comms.platform} onValueChange={(val: 'ios' | 'android' | 'desktop') => legacyActions.setCommsPlatform(val)}>
                             <SelectTrigger className="h-12 bg-white/5 border-white/10 rounded-xl">
                                 <SelectValue />
                             </SelectTrigger>
@@ -298,6 +562,18 @@ export default function Dashboard() {
                     </div>
                 </div>
             </HalfSheet>
+
+            {/* --- WEEKLY SNAPSHOT MODAL --- */}
+            <WeeklySnapshotModal
+                open={showSnapshotModal}
+                onClose={() => {
+                    setShowSnapshotModal(false);
+                    if (showSnapshot) {
+                        dismissSnapshot();
+                    }
+                }}
+                data={snapshot}
+            />
 
         </PageShell>
     );

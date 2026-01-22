@@ -18,3 +18,4 @@ export { ConsultationCard } from "./ConsultationCard";
 export { BottomSheet, ActionSheet } from "./BottomSheet";
 export { FullScreenSheet } from "./FullScreenSheet";
 export { HalfSheet } from "./HalfSheet";
+export { WeeklySnapshotModal } from "./WeeklySnapshotModal";

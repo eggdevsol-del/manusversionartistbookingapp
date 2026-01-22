@@ -500,3 +500,215 @@ export const moodboardItemsRelations = relations(moodboardItems, ({ one }) => ({
 		references: [moodboards.id],
 	}),
 }));
+
+
+// ==========================================
+// REVENUE PROTECTION ALGORITHM TABLES
+// ==========================================
+
+/**
+ * Task Completion Registry
+ * Records every task completion for analytics
+ */
+export const taskCompletions = mysqlTable("task_completions", {
+	id: int().autoincrement().notNull(),
+	artistId: varchar({ length: 64 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+	taskType: varchar({ length: 100 }).notNull(), // e.g., 'new_consultation', 'deposit_collection', 'birthday_outreach'
+	taskTier: mysqlEnum(['tier1', 'tier2', 'tier3', 'tier4']).notNull(),
+	taskDomain: mysqlEnum(['business', 'social', 'personal']).default('business').notNull(),
+	relatedEntityType: varchar({ length: 50 }), // 'consultation', 'appointment', 'conversation', 'user'
+	relatedEntityId: varchar({ length: 64 }), // ID of the related entity
+	clientId: varchar({ length: 64 }).references(() => users.id, { onDelete: "set null" }),
+	priorityScore: int().notNull(), // Score at time of completion
+	startedAt: timestamp({ mode: 'string' }).notNull(), // When task was selected/started
+	completedAt: timestamp({ mode: 'string' }).notNull(), // When task was marked complete
+	timeToCompleteSeconds: int().notNull(), // Calculated: completedAt - startedAt
+	actionTaken: varchar({ length: 50 }), // 'sms', 'email', 'in_app', 'manual'
+	createdAt: timestamp({ mode: 'string' }).default(sql`(now())`),
+}, (table) => [
+	primaryKey({ columns: [table.id], name: "task_completions_id" }),
+	index("idx_artist_task_type").on(table.artistId, table.taskType),
+	index("idx_artist_completed").on(table.artistId, table.completedAt),
+	index("idx_task_domain").on(table.taskDomain),
+]);
+
+/**
+ * Weekly Analytics Snapshots
+ * Pre-computed weekly metrics for the analytics modal
+ */
+export const weeklyAnalytics = mysqlTable("weekly_analytics", {
+	id: int().autoincrement().notNull(),
+	artistId: varchar({ length: 64 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+	weekStartDate: datetime({ mode: 'string' }).notNull(), // Monday of the week
+	weekEndDate: datetime({ mode: 'string' }).notNull(), // Sunday of the week
+	
+	// Task completion metrics
+	totalTasksCompleted: int().default(0),
+	tier1TasksCompleted: int().default(0),
+	tier2TasksCompleted: int().default(0),
+	tier3TasksCompleted: int().default(0),
+	tier4TasksCompleted: int().default(0),
+	
+	// Response time metrics (in seconds)
+	avgConsultationResponseTime: int(), // Average time to respond to new consultations
+	fastestConsultationResponse: int(),
+	slowestConsultationResponse: int(),
+	
+	// Task completion time metrics (in seconds)
+	avgTaskCompletionTime: int(),
+	avgTier1CompletionTime: int(),
+	avgTier2CompletionTime: int(),
+	
+	// Follow-up metrics
+	followUpsWithin24Hours: int().default(0),
+	followUpsWithin48Hours: int().default(0),
+	totalFollowUpsNeeded: int().default(0),
+	followUpRate: int(), // Percentage (0-100)
+	
+	// Revenue protection metrics
+	depositsCollected: int().default(0),
+	depositsOutstanding: int().default(0),
+	appointmentsConfirmed: int().default(0),
+	appointmentsUnconfirmed: int().default(0),
+	
+	// Consultation conversion
+	newConsultations: int().default(0),
+	consultationsConverted: int().default(0), // Became appointments
+	conversionRate: int(), // Percentage (0-100)
+	
+	// Comparison to benchmarks (stored as percentage relative to benchmark)
+	responseTimeVsBenchmark: int(), // 100 = at benchmark, >100 = faster, <100 = slower
+	completionRateVsBenchmark: int(),
+	followUpRateVsBenchmark: int(),
+	
+	// Overall efficiency score (0-100)
+	efficiencyScore: int(),
+	
+	createdAt: timestamp({ mode: 'string' }).default(sql`(now())`),
+	updatedAt: timestamp({ mode: 'string' }).default(sql`(now())`),
+}, (table) => [
+	primaryKey({ columns: [table.id], name: "weekly_analytics_id" }),
+	unique("artist_week").on(table.artistId, table.weekStartDate),
+	index("idx_artist_week").on(table.artistId, table.weekStartDate),
+]);
+
+/**
+ * Artist Dashboard Settings
+ * Stores artist preferences for dashboard behavior
+ */
+export const dashboardSettings = mysqlTable("dashboard_settings", {
+	id: int().autoincrement().notNull(),
+	artistId: varchar({ length: 64 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+	
+	// Task display settings
+	maxVisibleTasks: int().default(10),
+	
+	// Booking goal settings
+	goalAdvancedBookingMonths: int().default(3), // How far ahead they want to be booked (1-12)
+	
+	// Email client preference
+	preferredEmailClient: mysqlEnum(['default', 'gmail', 'outlook', 'apple_mail']).default('default'),
+	
+	// Analytics preferences
+	showWeeklySnapshot: tinyint().default(1),
+	lastSnapshotShownAt: timestamp({ mode: 'string' }),
+	
+	createdAt: timestamp({ mode: 'string' }).default(sql`(now())`),
+	updatedAt: timestamp({ mode: 'string' }).default(sql`(now())`),
+}, (table) => [
+	primaryKey({ columns: [table.id], name: "dashboard_settings_id" }),
+	unique("artist_dashboard_settings").on(table.artistId),
+]);
+
+/**
+ * Active Tasks Cache
+ * Stores currently generated tasks for quick retrieval
+ * Regenerated on relevant data changes
+ */
+export const activeTasks = mysqlTable("active_tasks", {
+	id: int().autoincrement().notNull(),
+	artistId: varchar({ length: 64 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+	taskDomain: mysqlEnum(['business', 'social', 'personal']).default('business').notNull(),
+	taskType: varchar({ length: 100 }).notNull(),
+	taskTier: mysqlEnum(['tier1', 'tier2', 'tier3', 'tier4']).notNull(),
+	title: varchar({ length: 255 }).notNull(),
+	context: text(), // Additional context shown on card
+	priorityScore: int().notNull(),
+	priorityLevel: mysqlEnum(['critical', 'high', 'medium', 'low']).notNull(),
+	
+	// Related entity info
+	relatedEntityType: varchar({ length: 50 }),
+	relatedEntityId: varchar({ length: 64 }),
+	clientId: varchar({ length: 64 }).references(() => users.id, { onDelete: "cascade" }),
+	clientName: varchar({ length: 255 }),
+	
+	// Action info for SMS/Email integration
+	actionType: mysqlEnum(['in_app', 'sms', 'email', 'external']),
+	smsNumber: varchar({ length: 20 }),
+	smsBody: text(),
+	emailRecipient: varchar({ length: 320 }),
+	emailSubject: varchar({ length: 255 }),
+	emailBody: text(),
+	deepLink: varchar({ length: 500 }), // In-app navigation link
+	
+	// Timing info
+	dueAt: timestamp({ mode: 'string' }), // When this task becomes urgent
+	expiresAt: timestamp({ mode: 'string' }), // When this task is no longer relevant
+	
+	// Tracking
+	startedAt: timestamp({ mode: 'string' }), // When user selected this task
+	
+	createdAt: timestamp({ mode: 'string' }).default(sql`(now())`),
+	updatedAt: timestamp({ mode: 'string' }).default(sql`(now())`),
+}, (table) => [
+	primaryKey({ columns: [table.id], name: "active_tasks_id" }),
+	index("idx_artist_domain").on(table.artistId, table.taskDomain),
+	index("idx_artist_score").on(table.artistId, table.priorityScore),
+]);
+
+// Type exports for new tables
+export type InsertTaskCompletion = InferInsertModel<typeof taskCompletions>;
+export type SelectTaskCompletion = InferSelectModel<typeof taskCompletions>;
+export type InsertWeeklyAnalytics = InferInsertModel<typeof weeklyAnalytics>;
+export type SelectWeeklyAnalytics = InferSelectModel<typeof weeklyAnalytics>;
+export type InsertDashboardSettings = InferInsertModel<typeof dashboardSettings>;
+export type SelectDashboardSettings = InferSelectModel<typeof dashboardSettings>;
+export type InsertActiveTask = InferInsertModel<typeof activeTasks>;
+export type SelectActiveTask = InferSelectModel<typeof activeTasks>;
+
+// Relations for new tables
+export const taskCompletionsRelations = relations(taskCompletions, ({ one }) => ({
+	artist: one(users, {
+		fields: [taskCompletions.artistId],
+		references: [users.id],
+	}),
+	client: one(users, {
+		fields: [taskCompletions.clientId],
+		references: [users.id],
+	}),
+}));
+
+export const weeklyAnalyticsRelations = relations(weeklyAnalytics, ({ one }) => ({
+	artist: one(users, {
+		fields: [weeklyAnalytics.artistId],
+		references: [users.id],
+	}),
+}));
+
+export const dashboardSettingsRelations = relations(dashboardSettings, ({ one }) => ({
+	artist: one(users, {
+		fields: [dashboardSettings.artistId],
+		references: [users.id],
+	}),
+}));
+
+export const activeTasksRelations = relations(activeTasks, ({ one }) => ({
+	artist: one(users, {
+		fields: [activeTasks.artistId],
+		references: [users.id],
+	}),
+	client: one(users, {
+		fields: [activeTasks.clientId],
+		references: [users.id],
+	}),
+}));
