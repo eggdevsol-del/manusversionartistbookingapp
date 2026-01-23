@@ -141,6 +141,11 @@ export const dashboardTasksRouter = router({
       const startedAt = new Date(input.startedAt);
       const timeToCompleteSeconds = Math.floor((completedAt.getTime() - startedAt.getTime()) / 1000);
 
+      // Format as MySQL DATETIME: YYYY-MM-DD HH:MM:SS
+      const formatMySQLDateTime = (date: Date): string => {
+        return date.toISOString().slice(0, 19).replace('T', ' ');
+      };
+
       // Record in task_completions
       await db.insert(schema.taskCompletions).values({
         artistId: user.id,
@@ -151,8 +156,8 @@ export const dashboardTasksRouter = router({
         relatedEntityId: input.relatedEntityId,
         clientId: input.clientId,
         priorityScore: input.priorityScore,
-        startedAt: startedAt.toISOString(),
-        completedAt: completedAt.toISOString(),
+        startedAt: formatMySQLDateTime(startedAt),
+        completedAt: formatMySQLDateTime(completedAt),
         timeToCompleteSeconds,
         actionTaken: input.actionTaken || 'manual'
       });
