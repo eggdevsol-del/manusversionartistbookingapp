@@ -745,17 +745,28 @@ export async function generateBusinessTasks(
   
   // Get recently completed tasks (last 24 hours) to filter them out
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  // Format as MySQL DATETIME: YYYY-MM-DD HH:MM:SS
+  const oneDayAgoStr = oneDayAgo.toISOString().slice(0, 19).replace('T', ' ');
+  console.log(`[BusinessTaskGenerator] Looking for completions after: ${oneDayAgoStr}`);
+  
   const recentCompletions = await db.query.taskCompletions.findMany({
     where: and(
       eq(schema.taskCompletions.artistId, artistId),
-      gte(schema.taskCompletions.completedAt, oneDayAgo.toISOString())
+      gte(schema.taskCompletions.completedAt, oneDayAgoStr)
     )
   });
+  
+  console.log(`[BusinessTaskGenerator] Raw completions found:`, recentCompletions.map(c => ({
+    taskType: c.taskType,
+    relatedEntityId: c.relatedEntityId,
+    completedAt: c.completedAt
+  })));
   
   // Create a set of completed task keys for fast lookup
   const completedTaskKeys = new Set(
     recentCompletions.map(c => `${c.taskType}-${c.relatedEntityId || 'none'}`)
   );
+  console.log(`[BusinessTaskGenerator] Completed task keys:`, Array.from(completedTaskKeys));
   console.log(`[BusinessTaskGenerator] Found ${completedTaskKeys.size} recently completed tasks`);
   
   // Generate all task types in parallel
@@ -795,11 +806,16 @@ export async function generateBusinessTasks(
   ];
   
   console.log(`[BusinessTaskGenerator] Generated ${allTasks.length} total tasks`);
+  console.log(`[BusinessTaskGenerator] Generated task keys:`, allTasks.map(t => `${t.taskType}-${t.relatedEntityId || 'none'}`));
   
   // Filter out recently completed tasks
   const filteredTasks = allTasks.filter(task => {
     const taskKey = `${task.taskType}-${task.relatedEntityId || 'none'}`;
-    return !completedTaskKeys.has(taskKey);
+    const isCompleted = completedTaskKeys.has(taskKey);
+    if (isCompleted) {
+      console.log(`[BusinessTaskGenerator] Filtering out completed task: ${taskKey}`);
+    }
+    return !isCompleted;
   });
   
   console.log(`[BusinessTaskGenerator] After filtering completed: ${filteredTasks.length} tasks`);
