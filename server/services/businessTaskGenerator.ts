@@ -245,7 +245,7 @@ async function generateDepositTasks(
       emailRecipient: null,
       emailSubject: null,
       emailBody: null,
-      deepLink: `/conversations/${appt.conversationId}`,
+      deepLink: `/chat/${appt.conversationId}`,
       dueAt: new Date(new Date(appt.startTime).getTime() - 72 * 60 * 60 * 1000), // 72 hours before
       expiresAt: new Date(appt.startTime)
     });
@@ -314,7 +314,7 @@ async function generateConfirmationTasks(
       emailRecipient: null,
       emailSubject: null,
       emailBody: null,
-      deepLink: `/conversations/${appt.conversationId}`,
+      deepLink: `/chat/${appt.conversationId}`,
       dueAt: new Date(new Date(appt.startTime).getTime() - 24 * 60 * 60 * 1000), // 24 hours before
       expiresAt: new Date(appt.startTime)
     });
@@ -374,7 +374,7 @@ async function generateFollowUpTasks(
       emailRecipient: null,
       emailSubject: null,
       emailBody: null,
-      deepLink: `/conversations/${consult.conversationId}`,
+      deepLink: `/chat/${consult.conversationId}`,
       dueAt: null,
       expiresAt: null
     });
@@ -445,7 +445,7 @@ async function generateStaleConversationTasks(
       emailRecipient: null,
       emailSubject: null,
       emailBody: null,
-      deepLink: `/conversations/${conv.id}`,
+      deepLink: `/chat/${conv.id}`,
       dueAt: null,
       expiresAt: null
     });
@@ -523,7 +523,7 @@ async function generateBirthdayTasks(
       emailRecipient: client.email || null,
       emailSubject: `Happy Birthday ${client.name}! 🎂`,
       emailBody: birthdayMessage,
-      deepLink: `/clients/${clientId}`,
+      deepLink: `/conversations`,
       dueAt: thisYearBirthday,
       expiresAt: new Date(thisYearBirthday.getTime() + 24 * 60 * 60 * 1000)
     });
@@ -591,7 +591,7 @@ async function generateAnniversaryTasks(
       emailRecipient: appt.client?.email || null,
       emailSubject: `${yearsAgo} Year Tattoo Anniversary! 🎨`,
       emailBody: anniversaryMessage,
-      deepLink: `/clients/${appt.clientId}`,
+      deepLink: `/conversations`,
       dueAt: anniversaryDate,
       expiresAt: new Date(anniversaryDate.getTime() + 24 * 60 * 60 * 1000)
     });
@@ -654,7 +654,7 @@ async function generateHealedPhotoTasks(
       emailRecipient: null,
       emailSubject: null,
       emailBody: null,
-      deepLink: `/conversations/${appt.conversationId}`,
+      deepLink: `/chat/${appt.conversationId}`,
       dueAt: null,
       expiresAt: null
     });
@@ -709,7 +709,7 @@ async function generateThankYouTasks(
       emailRecipient: null,
       emailSubject: null,
       emailBody: null,
-      deepLink: `/conversations/${appt.conversationId}`,
+      deepLink: `/chat/${appt.conversationId}`,
       dueAt: null,
       expiresAt: new Date(endOfToday)
     });
@@ -728,6 +728,21 @@ export async function generateBusinessTasks(
   maxTasks: number = 10
 ): Promise<BusinessTask[]> {
   console.log(`[BusinessTaskGenerator] Generating tasks for artist ${artistId}`);
+  
+  // Get recently completed tasks (last 24 hours) to filter them out
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const recentCompletions = await db.query.taskCompletions.findMany({
+    where: and(
+      eq(schema.taskCompletions.artistId, artistId),
+      gte(schema.taskCompletions.completedAt, oneDayAgo.toISOString())
+    )
+  });
+  
+  // Create a set of completed task keys for fast lookup
+  const completedTaskKeys = new Set(
+    recentCompletions.map(c => `${c.taskType}-${c.relatedEntityId || 'none'}`)
+  );
+  console.log(`[BusinessTaskGenerator] Found ${completedTaskKeys.size} recently completed tasks`);
   
   // Generate all task types in parallel
   const [
@@ -767,11 +782,19 @@ export async function generateBusinessTasks(
   
   console.log(`[BusinessTaskGenerator] Generated ${allTasks.length} total tasks`);
   
+  // Filter out recently completed tasks
+  const filteredTasks = allTasks.filter(task => {
+    const taskKey = `${task.taskType}-${task.relatedEntityId || 'none'}`;
+    return !completedTaskKeys.has(taskKey);
+  });
+  
+  console.log(`[BusinessTaskGenerator] After filtering completed: ${filteredTasks.length} tasks`);
+  
   // Sort by priority score (descending)
-  allTasks.sort((a, b) => b.priorityScore - a.priorityScore);
+  filteredTasks.sort((a, b) => b.priorityScore - a.priorityScore);
   
   // Return top N tasks
-  return allTasks.slice(0, maxTasks);
+  return filteredTasks.slice(0, maxTasks);
 }
 
 export { BENCHMARKS };
