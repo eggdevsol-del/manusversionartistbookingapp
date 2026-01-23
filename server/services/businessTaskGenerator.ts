@@ -343,6 +343,14 @@ async function generateFollowUpTasks(
     }
   });
 
+  // Get all conversations for this artist to lookup by clientId if needed
+  const allConversations = await db.query.conversations.findMany({
+    where: eq(schema.conversations.artistId, artistId)
+  });
+  const conversationsByClient = new Map(
+    allConversations.map(c => [c.clientId, c.id])
+  );
+
   for (const consult of respondedConsultations) {
     const days = daysSince(consult.updatedAt!);
     if (days < 1) continue; // Too soon to follow up
@@ -356,6 +364,12 @@ async function generateFollowUpTasks(
     else baseScore = 250;
     
     const daysLabel = Math.floor(days);
+    
+    // Try to find conversation: first from consultation, then by clientId lookup
+    let conversationId = consult.conversationId;
+    if (!conversationId && consult.clientId) {
+      conversationId = conversationsByClient.get(consult.clientId) || null;
+    }
     
     tasks.push({
       taskType: 'follow_up_responded',
@@ -374,7 +388,7 @@ async function generateFollowUpTasks(
       emailRecipient: null,
       emailSubject: null,
       emailBody: null,
-      deepLink: consult.conversationId ? `/chat/${consult.conversationId}` : `/conversations?consultationId=${consult.id}`,
+      deepLink: conversationId ? `/chat/${conversationId}` : `/conversations`,
       dueAt: null,
       expiresAt: null
     });
