@@ -245,7 +245,7 @@ async function generateDepositTasks(
       emailRecipient: null,
       emailSubject: null,
       emailBody: null,
-      deepLink: `/chat/${appt.conversationId}`,
+      deepLink: appt.conversationId ? `/chat/${appt.conversationId}` : `/conversations`,
       dueAt: new Date(new Date(appt.startTime).getTime() - 72 * 60 * 60 * 1000), // 72 hours before
       expiresAt: new Date(appt.startTime)
     });
@@ -314,7 +314,7 @@ async function generateConfirmationTasks(
       emailRecipient: null,
       emailSubject: null,
       emailBody: null,
-      deepLink: `/chat/${appt.conversationId}`,
+      deepLink: appt.conversationId ? `/chat/${appt.conversationId}` : `/conversations`,
       dueAt: new Date(new Date(appt.startTime).getTime() - 24 * 60 * 60 * 1000), // 24 hours before
       expiresAt: new Date(appt.startTime)
     });
@@ -374,7 +374,7 @@ async function generateFollowUpTasks(
       emailRecipient: null,
       emailSubject: null,
       emailBody: null,
-      deepLink: `/chat/${consult.conversationId}`,
+      deepLink: consult.conversationId ? `/chat/${consult.conversationId}` : `/conversations?consultationId=${consult.id}`,
       dueAt: null,
       expiresAt: null
     });
@@ -654,7 +654,7 @@ async function generateHealedPhotoTasks(
       emailRecipient: null,
       emailSubject: null,
       emailBody: null,
-      deepLink: `/chat/${appt.conversationId}`,
+      deepLink: appt.conversationId ? `/chat/${appt.conversationId}` : `/conversations`,
       dueAt: null,
       expiresAt: null
     });
@@ -664,7 +664,7 @@ async function generateHealedPhotoTasks(
 }
 
 /**
- * TIER 3: Post-Appointment Thank You
+ * TIER 4: Thank You / Review Request
  */
 async function generateThankYouTasks(
   db: MySql2Database<typeof schema>,
@@ -709,7 +709,7 @@ async function generateThankYouTasks(
       emailRecipient: null,
       emailSubject: null,
       emailBody: null,
-      deepLink: `/chat/${appt.conversationId}`,
+      deepLink: appt.conversationId ? `/chat/${appt.conversationId}` : `/conversations`,
       dueAt: null,
       expiresAt: new Date(endOfToday)
     });
