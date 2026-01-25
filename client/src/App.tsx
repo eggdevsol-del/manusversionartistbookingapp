@@ -31,6 +31,7 @@ import Signup from "./pages/Signup";
 import ClientProfile from "./pages/ClientProfile";
 import { PublicFunnel } from "./pages/funnel";
 import { DepositSheet } from "./pages/funnel/DepositSheet";
+import LeadDetail from "./pages/LeadDetail";
 
 function Router() {
   const [location] = useLocation();
@@ -50,6 +51,7 @@ function Router() {
         <Route path="/deposit/:token" component={DepositSheet} />
 
         <Route path="/conversations" component={Conversations} />
+        <Route path="/lead/:id" component={LeadDetail} />
         <Route path="/chat/:id" component={Chat} />
         <Route path="/calendar" component={Calendar} />
 
