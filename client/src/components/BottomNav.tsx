@@ -129,22 +129,22 @@ export default function BottomNav() {
             {/* Swipe indicator - appears above nav when contextual row available */}
             {showSwipeIndicator && (
                 <div 
-                    className="absolute -top-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-0.5 opacity-40"
+                    className="absolute -top-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-0.5 opacity-60"
                     onClick={() => setContextualVisible(true)}
                 >
-                    <div className="w-8 h-1 rounded-full bg-white/60" />
-                    <span className="text-[10px] text-white/60 font-medium">Swipe up</span>
+                    <div className="w-8 h-1 rounded-full bg-gray-600 dark:bg-white/60" />
+                    <span className="text-[10px] text-gray-600 dark:text-white/60 font-medium">Swipe up</span>
                 </div>
             )}
 
             {/* Swipe indicator for Row 1 - swipe up or down to return to main nav */}
             {showSwipeDownIndicator && (
                 <div 
-                    className="absolute -top-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-0.5 opacity-40"
+                    className="absolute -top-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-0.5 opacity-60"
                     onClick={() => setContextualVisible(false)}
                 >
-                    <div className="w-8 h-1 rounded-full bg-white/60" />
-                    <span className="text-[10px] text-white/60 font-medium">Swipe to close</span>
+                    <div className="w-8 h-1 rounded-full bg-gray-600 dark:bg-white/60" />
+                    <span className="text-[10px] text-gray-600 dark:text-white/60 font-medium">Swipe to close</span>
                 </div>
             )}
 
