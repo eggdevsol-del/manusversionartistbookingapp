@@ -5,6 +5,7 @@ import { User, Mail, Phone, Cake, BadgeCheck, Image as ImageIcon, Camera, Loader
 import { format } from "date-fns";
 import { trpc } from "@/lib/trpc";
 import { useState } from "react";
+import { createPortal } from "react-dom";
 
 interface ClientProfileSheetProps {
     isOpen: boolean;
@@ -185,14 +186,14 @@ export function ClientProfileSheet({ isOpen, onClose, client }: ClientProfileShe
                 </Tabs>
             </SheetShell>
 
-            {/* Image Lightbox */}
-            {selectedImage && (
+            {/* Image Lightbox - Portal to body to ensure it's above all sheets */}
+            {selectedImage && createPortal(
                 <div 
-                    className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4"
+                    className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center p-4"
                     onClick={() => setSelectedImage(null)}
                 >
                     <button 
-                        className="absolute top-4 right-4 text-white/70 hover:text-white text-sm"
+                        className="absolute top-4 right-4 text-white/70 hover:text-white text-sm px-3 py-1.5 rounded-lg bg-white/10 backdrop-blur-sm z-10"
                         onClick={() => setSelectedImage(null)}
                     >
                         Close
@@ -200,10 +201,11 @@ export function ClientProfileSheet({ isOpen, onClose, client }: ClientProfileShe
                     <img 
                         src={selectedImage} 
                         alt="Full size"
-                        className="max-w-full max-h-full object-contain rounded-lg"
+                        className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
                         onClick={(e) => e.stopPropagation()}
                     />
-                </div>
+                </div>,
+                document.body
             )}
         </>
     );
