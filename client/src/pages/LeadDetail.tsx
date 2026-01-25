@@ -1,9 +1,9 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, Mail, Phone, Calendar, DollarSign, Palette, MapPin, Clock, MessageCircle, Check, X } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Calendar, DollarSign, Palette, MapPin, Clock, MessageCircle, MessageSquare, X } from "lucide-react";
 import { LoadingState, PageShell, GlassSheet, PageHeader } from "@/components/ui/ssot";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 
@@ -25,7 +25,6 @@ export default function LeadDetail() {
   // Update lead status mutation
   const updateStatusMutation = trpc.funnel.updateLeadStatus.useMutation({
     onSuccess: () => {
-      toast.success("Lead status updated");
       refetch();
     },
     onError: (error) => {
@@ -71,8 +70,18 @@ export default function LeadDetail() {
     });
   };
 
-  const handleMarkContacted = () => {
-    updateStatusMutation.mutate({ leadId: lead.id, status: 'contacted' });
+  const handleOpenChat = () => {
+    // Mark lead as contacted when opening chat
+    if (lead.status === 'new') {
+      updateStatusMutation.mutate({ leadId: lead.id, status: 'contacted' });
+    }
+    
+    // Navigate to chat if conversation exists
+    if (lead.conversationId) {
+      setLocation(`/chat/${lead.conversationId}`);
+    } else {
+      toast.error("No conversation found for this lead. The client may have submitted before the update.");
+    }
   };
 
   const handleArchive = () => {
@@ -208,16 +217,15 @@ export default function LeadDetail() {
 
             {/* Action Buttons */}
             <div className="space-y-3 pt-4">
-              {lead.status === 'new' && (
-                <Button
-                  className="w-full bg-green-600 hover:bg-green-700"
-                  onClick={handleMarkContacted}
-                  disabled={updateStatusMutation.isPending}
-                >
-                  <Check className="w-4 h-4 mr-2" />
-                  Mark as Contacted
-                </Button>
-              )}
+              {/* Primary action: Open in Chat */}
+              <Button
+                className="w-full bg-green-600 hover:bg-green-700"
+                onClick={handleOpenChat}
+                disabled={updateStatusMutation.isPending}
+              >
+                <MessageSquare className="w-4 h-4 mr-2" />
+                Open in Chat
+              </Button>
               
               <Button
                 variant="outline"

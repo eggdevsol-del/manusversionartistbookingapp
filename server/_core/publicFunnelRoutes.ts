@@ -205,6 +205,71 @@ export function registerPublicFunnelRoutes(app: Express) {
       }
       console.log(`[PublicFunnel] POST /api/public/funnel/submit - Session saved`);
 
+      // Create client user if not exists
+      let clientUserId: string | null = null;
+      let conversationId: number | null = null;
+
+      if (contact?.name && contact?.email) {
+        console.log(`[PublicFunnel] POST /api/public/funnel/submit - Checking for existing client user: ${contact.email}`);
+        
+        // Check for existing user with this email
+        const existingUser = await db.query.users.findFirst({
+          where: eq(schema.users.email, contact.email.toLowerCase()),
+        });
+
+        if (existingUser) {
+          console.log(`[PublicFunnel] POST /api/public/funnel/submit - Found existing user: ${existingUser.id}`);
+          clientUserId = existingUser.id;
+        } else {
+          // Create new client user
+          const newUserId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          console.log(`[PublicFunnel] POST /api/public/funnel/submit - Creating new client user: ${newUserId}`);
+          
+          await db.insert(schema.users).values({
+            id: newUserId,
+            name: contact.name,
+            email: contact.email.toLowerCase(),
+            phone: contact.phone || null,
+            role: 'client',
+            loginMethod: 'funnel',
+            hasCompletedOnboarding: 0,
+            createdAt: nowFormatted,
+            lastSignedIn: nowFormatted,
+          });
+          
+          clientUserId = newUserId;
+          console.log(`[PublicFunnel] POST /api/public/funnel/submit - Created new client user: ${clientUserId}`);
+        }
+
+        // Create or get conversation between artist and client
+        if (clientUserId) {
+          console.log(`[PublicFunnel] POST /api/public/funnel/submit - Checking for existing conversation`);
+          
+          const existingConversation = await db.query.conversations.findFirst({
+            where: and(
+              eq(schema.conversations.artistId, artistId),
+              eq(schema.conversations.clientId, clientUserId)
+            ),
+          });
+
+          if (existingConversation) {
+            console.log(`[PublicFunnel] POST /api/public/funnel/submit - Found existing conversation: ${existingConversation.id}`);
+            conversationId = existingConversation.id;
+          } else {
+            console.log(`[PublicFunnel] POST /api/public/funnel/submit - Creating new conversation`);
+            const [newConversation] = await db.insert(schema.conversations).values({
+              artistId,
+              clientId: clientUserId,
+              lastMessageAt: nowFormatted,
+              createdAt: nowFormatted,
+            });
+            
+            conversationId = newConversation.insertId;
+            console.log(`[PublicFunnel] POST /api/public/funnel/submit - Created new conversation: ${conversationId}`);
+          }
+        }
+      }
+
       // Create lead if contact info provided
       let leadId: number | null = null;
 
@@ -272,6 +337,14 @@ export function registerPublicFunnelRoutes(app: Express) {
 
           leadId = newLead.insertId;
           console.log(`[PublicFunnel] POST /api/public/funnel/submit - Created new lead: ${leadId}`);
+
+          // Link conversation to lead if we created one
+          if (conversationId && leadId) {
+            console.log(`[PublicFunnel] POST /api/public/funnel/submit - Linking conversation ${conversationId} to lead ${leadId}`);
+            await db.update(schema.leads)
+              .set({ conversationId })
+              .where(eq(schema.leads.id, leadId));
+          }
         }
 
         // Update funnel session with lead ID
@@ -288,7 +361,7 @@ export function registerPublicFunnelRoutes(app: Express) {
       const duration = Date.now() - startTime;
       console.log(`[PublicFunnel] POST /api/public/funnel/submit - Success (${duration}ms), leadId=${leadId}`);
       
-      res.json({ success: true, leadId });
+      res.json({ success: true, leadId, clientUserId, conversationId });
     } catch (error) {
       const duration = Date.now() - startTime;
       console.error(`[PublicFunnel] POST /api/public/funnel/submit - Unhandled error (${duration}ms):`, error);
