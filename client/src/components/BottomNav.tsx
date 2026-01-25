@@ -256,6 +256,11 @@ export default function BottomNav() {
                     <div 
                         className="w-full overflow-x-auto snap-x snap-mandatory no-scrollbar overscroll-x-contain flex items-center shrink-0 border-t border-gray-200 dark:border-white/5"
                         style={{ height: ROW_HEIGHT }}
+                        onPointerDown={(e) => {
+                            // Stop propagation to prevent nav's swipe handlers from interfering with button clicks
+                            // The swipe gestures will still work on the indicator and empty areas
+                            e.stopPropagation();
+                        }}
                     >
                         {contextualRow}
                     </div>
