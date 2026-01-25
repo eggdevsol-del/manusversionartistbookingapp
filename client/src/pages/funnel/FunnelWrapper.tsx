@@ -391,7 +391,7 @@ export default function FunnelWrapper({ artistSlug }: FunnelWrapperProps) {
                 onChange={(e) => setProjectDescription(e.target.value)}
                 placeholder="Tell us about your vision..."
                 rows={4}
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent resize-none"
+                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent resize-none text-gray-900 bg-white placeholder-gray-400"
               />
               <p className="text-xs text-gray-500 mt-1">
                 {projectDescription.length < 10 
@@ -415,7 +415,7 @@ export default function FunnelWrapper({ artistSlug }: FunnelWrapperProps) {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Full name"
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-gray-900 bg-white placeholder-gray-400"
               />
             </div>
             
@@ -428,7 +428,7 @@ export default function FunnelWrapper({ artistSlug }: FunnelWrapperProps) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="your@email.com"
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-gray-900 bg-white placeholder-gray-400"
               />
             </div>
             
@@ -441,7 +441,7 @@ export default function FunnelWrapper({ artistSlug }: FunnelWrapperProps) {
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="Your phone number"
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-gray-900 bg-white placeholder-gray-400"
               />
             </div>
           </div>
