@@ -145,7 +145,7 @@ export default function Chat() {
     );
   }, [user?.role, quickActions, handleQuickAction, setShowBookingCalendar, setShowProjectWizard]);
 
-  useRegisterBottomNavRow(quickActionsRow);
+  useRegisterBottomNavRow("chat-actions", quickActionsRow);
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
