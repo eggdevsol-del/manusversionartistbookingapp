@@ -39,10 +39,18 @@ export const artistSettings = mysqlTable("artistSettings", {
 	createdAt: timestamp({ mode: 'string' }).default(sql`(now())`),
 	updatedAt: timestamp({ mode: 'string' }).default(sql`(now())`),
 	autoSendDepositInfo: tinyint().default(0),
+// Funnel settings (SSOT for booking link)
+publicSlug: varchar({ length: 50 }),
+funnelEnabled: tinyint().default(0),
+funnelWelcomeMessage: text(),
+styleOptions: text(), // JSON array of style options
+placementOptions: text(), // JSON array of placement options
+budgetRanges: text(), // JSON array of budget range objects
 },
-	(table) => [
-		primaryKey({ columns: [table.id], name: "artistSettings_id" }),
-	]);
+(table) => [
+primaryKey({ columns: [table.id], name: "artistSettings_id" }),
+unique("artistSettings_publicSlug_unique").on(table.publicSlug),
+]);
 
 export const clientContent = mysqlTable("client_content", {
 	id: int().autoincrement().notNull(),
