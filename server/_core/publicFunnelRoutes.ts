@@ -127,7 +127,7 @@ export function registerPublicFunnelRoutes(app: Express) {
         styleOptions,
         placementOptions,
         budgetRanges,
-        enabledSteps: ["intent", "contact", "style", "budget", "availability"],
+        enabledSteps: ["intent", "contact", "style", "bodyPlacement", "budget", "availability"],
       };
 
       const duration = Date.now() - startTime;
@@ -153,7 +153,7 @@ export function registerPublicFunnelRoutes(app: Express) {
     console.log(`[PublicFunnel] POST /api/public/funnel/submit - Body:`, JSON.stringify(req.body, null, 2));
     
     try {
-      const { artistId, sessionId, intent, contact, style, budget, availability } = req.body;
+      const { artistId, sessionId, intent, contact, style, bodyPlacement, budget, availability } = req.body;
 
       if (!artistId || !sessionId) {
         console.log(`[PublicFunnel] POST /api/public/funnel/submit - Error: Missing required fields (artistId=${artistId}, sessionId=${sessionId})`);
@@ -177,7 +177,7 @@ export function registerPublicFunnelRoutes(app: Express) {
         where: eq(schema.funnelSessions.id, sessionId),
       });
 
-      const stepData = JSON.stringify({ intent, contact, style, budget, availability });
+      const stepData = JSON.stringify({ intent, contact, style, bodyPlacement, budget, availability });
 
       if (existingSession) {
         console.log(`[PublicFunnel] POST /api/public/funnel/submit - Updating existing session`);
@@ -205,11 +205,16 @@ export function registerPublicFunnelRoutes(app: Express) {
       }
       console.log(`[PublicFunnel] POST /api/public/funnel/submit - Session saved`);
 
+      // Build client name from first/last name or use provided name
+      const clientName = contact?.firstName && contact?.lastName 
+        ? `${contact.firstName} ${contact.lastName}`.trim()
+        : contact?.name || '';
+
       // Create client user if not exists
       let clientUserId: string | null = null;
       let conversationId: number | null = null;
 
-      if (contact?.name && contact?.email) {
+      if (clientName && contact?.email) {
         console.log(`[PublicFunnel] POST /api/public/funnel/submit - Checking for existing client user: ${contact.email}`);
         
         // Check for existing user with this email
@@ -220,6 +225,18 @@ export function registerPublicFunnelRoutes(app: Express) {
         if (existingUser) {
           console.log(`[PublicFunnel] POST /api/public/funnel/submit - Found existing user: ${existingUser.id}`);
           clientUserId = existingUser.id;
+          
+          // Update user with new info if provided
+          const updateData: any = {};
+          if (clientName) updateData.name = clientName;
+          if (contact.phone) updateData.phone = contact.phone;
+          if (contact.birthdate) updateData.birthdate = contact.birthdate;
+          
+          if (Object.keys(updateData).length > 0) {
+            await db.update(schema.users)
+              .set(updateData)
+              .where(eq(schema.users.id, existingUser.id));
+          }
         } else {
           // Create new client user
           const newUserId = `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -227,7 +244,7 @@ export function registerPublicFunnelRoutes(app: Express) {
           
           await db.insert(schema.users).values({
             id: newUserId,
-            name: contact.name,
+            name: clientName,
             email: contact.email.toLowerCase(),
             phone: contact.phone || null,
             role: 'client',
@@ -273,8 +290,14 @@ export function registerPublicFunnelRoutes(app: Express) {
       // Create lead if contact info provided
       let leadId: number | null = null;
 
-      if (contact?.name && contact?.email) {
+      if (clientName && contact?.email) {
         console.log(`[PublicFunnel] POST /api/public/funnel/submit - Creating/updating lead for: ${contact.email}`);
+        
+        // Combine reference images and body placement images
+        const allReferenceImages = [
+          ...(style?.referenceImages || []),
+        ];
+        const bodyPlacementImagesArray = bodyPlacement?.placementImages || [];
         
         // Check for existing lead
         const existingLead = await db.query.leads.findFirst({
@@ -284,28 +307,36 @@ export function registerPublicFunnelRoutes(app: Express) {
           ),
         });
 
+        // Build lead data with expanded contact fields
+        const leadData = {
+          clientName,
+          clientEmail: contact.email.toLowerCase(),
+          clientPhone: contact.phone || null,
+          clientFirstName: contact.firstName || null,
+          clientLastName: contact.lastName || null,
+          clientBirthdate: contact.birthdate || null,
+          projectType: intent?.projectType || null,
+          projectDescription: intent?.projectDescription || null,
+          stylePreferences: style?.stylePreferences ? JSON.stringify(style.stylePreferences) : null,
+          referenceImages: allReferenceImages.length > 0 ? JSON.stringify(allReferenceImages) : null,
+          bodyPlacementImages: bodyPlacementImagesArray.length > 0 ? JSON.stringify(bodyPlacementImagesArray) : null,
+          placement: budget?.placement || null,
+          estimatedSize: budget?.estimatedSize || null,
+          budgetMin: budget?.budgetMin || null,
+          budgetMax: budget?.budgetMax || null,
+          budgetLabel: budget?.budgetLabel || null,
+          preferredTimeframe: availability?.preferredTimeframe || null,
+          preferredMonths: availability?.preferredMonths ? JSON.stringify(availability.preferredMonths) : null,
+          urgency: availability?.urgency || "flexible",
+          funnelSessionId: sessionId,
+          updatedAt: nowFormatted,
+          lastActivityAt: nowFormatted,
+        };
+
         if (existingLead) {
           console.log(`[PublicFunnel] POST /api/public/funnel/submit - Updating existing lead: ${existingLead.id}`);
           await db.update(schema.leads)
-            .set({
-              clientName: contact.name,
-              clientPhone: contact.phone || null,
-              projectType: intent?.projectType || null,
-              projectDescription: intent?.projectDescription || null,
-              stylePreferences: style?.stylePreferences ? JSON.stringify(style.stylePreferences) : null,
-              referenceImages: style?.referenceImages ? JSON.stringify(style.referenceImages) : null,
-              placement: budget?.placement || null,
-              estimatedSize: budget?.estimatedSize || null,
-              budgetMin: budget?.budgetMin || null,
-              budgetMax: budget?.budgetMax || null,
-              budgetLabel: budget?.budgetLabel || null,
-              preferredTimeframe: availability?.preferredTimeframe || null,
-              preferredMonths: availability?.preferredMonths ? JSON.stringify(availability.preferredMonths) : null,
-              urgency: availability?.urgency || "flexible",
-              funnelSessionId: sessionId,
-              updatedAt: nowFormatted,
-              lastActivityAt: nowFormatted,
-            })
+            .set(leadData)
             .where(eq(schema.leads.id, existingLead.id));
           
           leadId = existingLead.id;
@@ -315,24 +346,8 @@ export function registerPublicFunnelRoutes(app: Express) {
             artistId,
             source: "funnel",
             status: "new",
-            clientName: contact.name,
-            clientEmail: contact.email.toLowerCase(),
-            clientPhone: contact.phone || null,
-            projectType: intent?.projectType || null,
-            projectDescription: intent?.projectDescription || null,
-            stylePreferences: style?.stylePreferences ? JSON.stringify(style.stylePreferences) : null,
-            referenceImages: style?.referenceImages ? JSON.stringify(style.referenceImages) : null,
-            placement: budget?.placement || null,
-            estimatedSize: budget?.estimatedSize || null,
-            budgetMin: budget?.budgetMin || null,
-            budgetMax: budget?.budgetMax || null,
-            budgetLabel: budget?.budgetLabel || null,
-            preferredTimeframe: availability?.preferredTimeframe || null,
-            preferredMonths: availability?.preferredMonths ? JSON.stringify(availability.preferredMonths) : null,
-            urgency: availability?.urgency || "flexible",
-            funnelSessionId: sessionId,
+            ...leadData,
             createdAt: nowFormatted,
-            updatedAt: nowFormatted,
           });
 
           leadId = newLead.insertId;

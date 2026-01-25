@@ -786,6 +786,9 @@ export const leads = mysqlTable("leads", {
 	// Client info (may or may not have a user account yet)
 	clientId: varchar({ length: 64 }).references(() => users.id, { onDelete: "set null" }),
 	clientName: varchar({ length: 255 }).notNull(),
+	clientFirstName: varchar({ length: 100 }),
+	clientLastName: varchar({ length: 100 }),
+	clientBirthdate: varchar({ length: 20 }),
 	clientEmail: varchar({ length: 320 }).notNull(),
 	clientPhone: varchar({ length: 20 }),
 	
@@ -818,6 +821,7 @@ export const leads = mysqlTable("leads", {
 	// Style preferences
 	stylePreferences: text(), // JSON array of selected styles
 	referenceImages: text(), // JSON array of uploaded image URLs
+	bodyPlacementImages: text(), // JSON array of body placement photo URLs
 	
 	// Size & Budget
 	placement: varchar({ length: 100 }),
