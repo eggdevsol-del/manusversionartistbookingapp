@@ -6,17 +6,9 @@
  */
 
 import { z } from "zod";
-import { router, publicProcedure, protectedProcedure } from "../trpc";
-import { db } from "../../drizzle/db";
-import { 
-  leads, 
-  funnelSubmissions, 
-  artistSettings, 
-  users,
-  consultations,
-  conversations,
-  messages
-} from "../../drizzle/schema";
+import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
+import { getDb } from "../db";
+import * as schema from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { 
   deriveTagLabels, 
@@ -38,8 +30,11 @@ export const funnelRouter = router({
   checkSlugAvailability: publicProcedure
     .input(z.object({ slug: z.string() }))
     .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { available: false };
+      
       const existing = await db.query.artistSettings.findFirst({
-        where: eq(artistSettings.publicSlug, input.slug.toLowerCase()),
+        where: eq(schema.artistSettings.publicSlug, input.slug.toLowerCase()),
       });
       
       return { available: !existing };
@@ -79,9 +74,12 @@ export const funnelRouter = router({
   getArtistBySlug: publicProcedure
     .input(z.object({ slug: z.string() }))
     .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return null;
+      
       // Find artist settings by slug
       const settings = await db.query.artistSettings.findFirst({
-        where: eq(artistSettings.publicSlug, input.slug.toLowerCase()),
+        where: eq(schema.artistSettings.publicSlug, input.slug.toLowerCase()),
       });
 
       if (!settings || !settings.funnelEnabled) {
@@ -90,7 +88,7 @@ export const funnelRouter = router({
 
       // Get artist user info
       const artist = await db.query.users.findFirst({
-        where: eq(users.id, settings.userId),
+        where: eq(schema.users.id, settings.userId),
       });
 
       if (!artist) {
@@ -148,12 +146,15 @@ export const funnelRouter = router({
       isComplete: z.boolean(),
     }))
     .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error('Database connection failed');
+      
       const now = new Date();
       const nowFormatted = formatDateForMySQL(now);
 
       // Get artist by slug
       const settings = await db.query.artistSettings.findFirst({
-        where: eq(artistSettings.publicSlug, input.artistSlug.toLowerCase()),
+        where: eq(schema.artistSettings.publicSlug, input.artistSlug.toLowerCase()),
       });
 
       if (!settings) {
@@ -164,7 +165,7 @@ export const funnelRouter = router({
 
       // Check for existing funnel submission by session
       let existingSubmission = await db.query.funnelSubmissions.findFirst({
-        where: eq(funnelSubmissions.sessionId, input.sessionId),
+        where: eq(schema.funnelSubmissions.sessionId, input.sessionId),
       });
 
       // Flatten step data for storage
@@ -194,7 +195,7 @@ export const funnelRouter = router({
 
       if (existingSubmission) {
         // Update existing submission
-        await db.update(funnelSubmissions)
+        await db.update(schema.funnelSubmissions)
           .set({
             stepData: JSON.stringify(input.stepData),
             currentStep: input.currentStep,
@@ -202,10 +203,10 @@ export const funnelRouter = router({
             completedAt: input.isComplete ? nowFormatted : null,
             updatedAt: nowFormatted,
           })
-          .where(eq(funnelSubmissions.id, existingSubmission.id));
+          .where(eq(schema.funnelSubmissions.id, existingSubmission.id));
       } else {
         // Create new submission
-        const [newSubmission] = await db.insert(funnelSubmissions).values({
+        const [newSubmission] = await db.insert(schema.funnelSubmissions).values({
           artistId,
           sessionId: input.sessionId,
           stepData: JSON.stringify(input.stepData),
@@ -226,14 +227,14 @@ export const funnelRouter = router({
         // Check if lead already exists for this email + artist
         const existingLead = await db.query.leads.findFirst({
           where: and(
-            eq(leads.artistId, artistId),
-            eq(leads.email, flatData.email.toLowerCase())
+            eq(schema.leads.artistId, artistId),
+            eq(schema.leads.email, flatData.email.toLowerCase())
           ),
         });
 
         if (existingLead) {
           // Update existing lead
-          await db.update(leads)
+          await db.update(schema.leads)
             .set({
               name: flatData.name,
               phone: flatData.phone || null,
@@ -255,12 +256,12 @@ export const funnelRouter = router({
               funnelSubmissionId: existingSubmission!.id,
               updatedAt: nowFormatted,
             })
-            .where(eq(leads.id, existingLead.id));
+            .where(eq(schema.leads.id, existingLead.id));
           
           leadId = existingLead.id;
         } else {
           // Create new lead
-          const [newLead] = await db.insert(leads).values({
+          const [newLead] = await db.insert(schema.leads).values({
             artistId,
             source: 'funnel',
             sourceUrl: `/start/${input.artistSlug}`,
@@ -290,54 +291,48 @@ export const funnelRouter = router({
           
           leadId = newLead.insertId;
 
-          // Also create a consultation record for backward compatibility
-          const [newConsultation] = await db.insert(consultations).values({
+          // Create a consultation record linked to the lead
+          const [consultation] = await db.insert(schema.consultations).values({
             artistId,
-            clientId: null, // No client account yet
+            clientId: null, // Will be linked when client account is created
             leadId,
-            subject: flatData.projectType 
-              ? `${flatData.projectType.replace(/-/g, ' ')} - ${flatData.name}`
-              : `New consultation - ${flatData.name}`,
+            subject: flatData.projectType || 'New Consultation',
             description: flatData.projectDescription || '',
             status: 'pending',
             createdAt: nowFormatted,
             updatedAt: nowFormatted,
           });
 
-          // Create a conversation for the consultation
-          const [newConversation] = await db.insert(conversations).values({
+          // Create a conversation for the lead
+          const [conversation] = await db.insert(schema.conversations).values({
             artistId,
             clientId: null,
             leadId,
-            consultationId: newConsultation.insertId,
+            consultationId: consultation.insertId,
             lastMessageAt: nowFormatted,
             createdAt: nowFormatted,
             updatedAt: nowFormatted,
           });
 
-          // Update consultation with conversation ID
-          await db.update(consultations)
-            .set({ conversationId: newConversation.insertId })
-            .where(eq(consultations.id, newConsultation.insertId));
+          // Create initial message with funnel summary
+          const summaryMessage = `New consultation request via booking link:
 
-          // Create initial system message with lead summary
-          const summaryMessage = `📋 **New Consultation Request**\n\n` +
-            `**Name:** ${flatData.name}\n` +
-            `**Email:** ${flatData.email}\n` +
-            (flatData.phone ? `**Phone:** ${flatData.phone}\n` : '') +
-            `\n**Project:** ${flatData.projectType?.replace(/-/g, ' ') || 'Not specified'}\n` +
-            (flatData.projectDescription ? `**Description:** ${flatData.projectDescription}\n` : '') +
-            (flatData.stylePreferences?.length ? `**Styles:** ${flatData.stylePreferences.join(', ')}\n` : '') +
-            (flatData.placement ? `**Placement:** ${flatData.placement.replace(/-/g, ' ')}\n` : '') +
-            (flatData.estimatedSize ? `**Size:** ${flatData.estimatedSize}\n` : '') +
-            (flatData.budgetLabel ? `**Budget:** ${flatData.budgetLabel}\n` : '') +
-            (flatData.preferredTimeframe ? `**Timeframe:** ${flatData.preferredTimeframe.replace(/-/g, ' ')}\n` : '') +
-            (flatData.urgency ? `**Urgency:** ${flatData.urgency}\n` : '') +
-            `\n**Tags:** ${derivedTags.join(' | ')}`;
+**Project:** ${flatData.projectType || 'Not specified'}
+**Description:** ${flatData.projectDescription || 'Not provided'}
+**Placement:** ${flatData.placement || 'Not specified'}
+**Size:** ${flatData.estimatedSize || 'Not specified'}
+**Budget:** ${flatData.budgetLabel || 'Not specified'}
+**Timeframe:** ${flatData.preferredTimeframe || 'Flexible'}
+**Urgency:** ${flatData.urgency || 'Flexible'}
 
-          await db.insert(messages).values({
-            conversationId: newConversation.insertId,
-            senderId: artistId, // System message attributed to artist
+**Contact:**
+- Name: ${flatData.name}
+- Email: ${flatData.email}
+- Phone: ${flatData.phone || 'Not provided'}`;
+
+          await db.insert(schema.messages).values({
+            conversationId: conversation.insertId,
+            senderId: null, // System message
             senderType: 'system',
             content: summaryMessage,
             createdAt: nowFormatted,
@@ -347,7 +342,6 @@ export const funnelRouter = router({
 
       return {
         success: true,
-        submissionId: existingSubmission?.id,
         leadId,
         derivedTags,
         priorityScore,
@@ -356,60 +350,68 @@ export const funnelRouter = router({
     }),
 
   /**
-   * Get leads for the authenticated artist
-   * PROTECTED - requires auth
+   * Get leads for artist dashboard
+   * PROTECTED - requires authentication
    */
   getLeads: protectedProcedure
     .input(z.object({
-      status: z.enum(['new', 'contacted', 'qualified', 'proposal_sent', 'won', 'lost', 'archived']).optional(),
+      status: z.enum(['new', 'contacted', 'qualified', 'proposal_sent', 'converted', 'lost', 'archived']).optional(),
       limit: z.number().min(1).max(100).default(50),
       offset: z.number().min(0).default(0),
-    }).optional())
+    }))
     .query(async ({ ctx, input }) => {
-      const artistId = ctx.user.id;
-      const status = input?.status;
-      const limit = input?.limit || 50;
-      const offset = input?.offset || 0;
-
-      const conditions = [eq(leads.artistId, artistId)];
-      if (status) {
-        conditions.push(eq(leads.status, status));
-      }
-
-      const leadsList = await db.query.leads.findMany({
-        where: and(...conditions),
-        orderBy: [desc(leads.priorityScore), desc(leads.createdAt)],
-        limit,
-        offset,
+      const db = await getDb();
+      if (!db) return { leads: [], total: 0 };
+      
+      const { user } = ctx;
+      
+      let query = db.query.leads.findMany({
+        where: input.status 
+          ? and(eq(schema.leads.artistId, user.id), eq(schema.leads.status, input.status))
+          : eq(schema.leads.artistId, user.id),
+        orderBy: [desc(schema.leads.createdAt)],
+        limit: input.limit,
+        offset: input.offset,
       });
 
-      return leadsList.map(lead => ({
+      const leadsResult = await query;
+      
+      // Parse JSON fields
+      const parsedLeads = leadsResult.map(lead => ({
         ...lead,
         derivedTags: lead.derivedTags ? JSON.parse(lead.derivedTags) : [],
         stylePreferences: lead.stylePreferences ? JSON.parse(lead.stylePreferences) : [],
         referenceImages: lead.referenceImages ? JSON.parse(lead.referenceImages) : [],
         preferredMonths: lead.preferredMonths ? JSON.parse(lead.preferredMonths) : [],
       }));
+
+      return {
+        leads: parsedLeads,
+        total: parsedLeads.length,
+      };
     }),
 
   /**
    * Update lead status
-   * PROTECTED - requires auth
+   * PROTECTED - requires authentication
    */
   updateLeadStatus: protectedProcedure
     .input(z.object({
       leadId: z.number(),
-      status: z.enum(['new', 'contacted', 'qualified', 'proposal_sent', 'won', 'lost', 'archived']),
+      status: z.enum(['new', 'contacted', 'qualified', 'proposal_sent', 'converted', 'lost', 'archived']),
     }))
     .mutation(async ({ ctx, input }) => {
-      const artistId = ctx.user.id;
+      const db = await getDb();
+      if (!db) throw new Error('Database connection failed');
+      
+      const { user } = ctx;
       const now = formatDateForMySQL(new Date());
 
-      // Verify ownership
+      // Verify lead belongs to artist
       const lead = await db.query.leads.findFirst({
         where: and(
-          eq(leads.id, input.leadId),
-          eq(leads.artistId, artistId)
+          eq(schema.leads.id, input.leadId),
+          eq(schema.leads.artistId, user.id)
         ),
       });
 
@@ -417,17 +419,133 @@ export const funnelRouter = router({
         throw new Error('Lead not found');
       }
 
-      await db.update(leads)
+      // Update status
+      await db.update(schema.leads)
         .set({
           status: input.status,
+          contactedAt: input.status === 'contacted' && !lead.contactedAt ? now : lead.contactedAt,
+          convertedAt: input.status === 'converted' ? now : lead.convertedAt,
           updatedAt: now,
-          ...(input.status === 'contacted' && !lead.firstContactAt ? { firstContactAt: now } : {}),
-          ...(input.status === 'won' ? { convertedAt: now } : {}),
         })
-        .where(eq(leads.id, input.leadId));
+        .where(eq(schema.leads.id, input.leadId));
 
       return { success: true };
     }),
-});
 
-export type FunnelRouter = typeof funnelRouter;
+  /**
+   * Update artist funnel settings
+   * PROTECTED - requires authentication
+   */
+  updateFunnelSettings: protectedProcedure
+    .input(z.object({
+      publicSlug: z.string().min(3).max(50).optional(),
+      funnelEnabled: z.boolean().optional(),
+      funnelWelcomeMessage: z.string().max(500).optional(),
+      styleOptions: z.array(z.string()).optional(),
+      placementOptions: z.array(z.string()).optional(),
+      budgetRanges: z.array(z.object({
+        label: z.string(),
+        min: z.number(),
+        max: z.number().nullable(),
+      })).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error('Database connection failed');
+      
+      const { user } = ctx;
+      const now = formatDateForMySQL(new Date());
+
+      // Check if slug is taken (if changing)
+      if (input.publicSlug) {
+        const existing = await db.query.artistSettings.findFirst({
+          where: and(
+            eq(schema.artistSettings.publicSlug, input.publicSlug.toLowerCase()),
+            // Exclude current user
+          ),
+        });
+
+        if (existing && existing.userId !== user.id) {
+          throw new Error('This URL is already taken');
+        }
+      }
+
+      // Get or create artist settings
+      let settings = await db.query.artistSettings.findFirst({
+        where: eq(schema.artistSettings.userId, user.id),
+      });
+
+      const updateData: any = {
+        updatedAt: now,
+      };
+
+      if (input.publicSlug !== undefined) {
+        updateData.publicSlug = input.publicSlug.toLowerCase();
+      }
+      if (input.funnelEnabled !== undefined) {
+        updateData.funnelEnabled = input.funnelEnabled;
+      }
+      if (input.funnelWelcomeMessage !== undefined) {
+        updateData.funnelWelcomeMessage = input.funnelWelcomeMessage;
+      }
+      if (input.styleOptions !== undefined) {
+        updateData.styleOptions = JSON.stringify(input.styleOptions);
+      }
+      if (input.placementOptions !== undefined) {
+        updateData.placementOptions = JSON.stringify(input.placementOptions);
+      }
+      if (input.budgetRanges !== undefined) {
+        updateData.budgetRanges = JSON.stringify(input.budgetRanges);
+      }
+
+      if (settings) {
+        await db.update(schema.artistSettings)
+          .set(updateData)
+          .where(eq(schema.artistSettings.userId, user.id));
+      } else {
+        await db.insert(schema.artistSettings).values({
+          userId: user.id,
+          ...updateData,
+          createdAt: now,
+        });
+      }
+
+      return { success: true };
+    }),
+
+  /**
+   * Get artist funnel settings
+   * PROTECTED - requires authentication
+   */
+  getFunnelSettings: protectedProcedure
+    .query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) return null;
+      
+      const { user } = ctx;
+
+      const settings = await db.query.artistSettings.findFirst({
+        where: eq(schema.artistSettings.userId, user.id),
+      });
+
+      if (!settings) {
+        return {
+          publicSlug: null,
+          funnelEnabled: false,
+          funnelWelcomeMessage: null,
+          styleOptions: [],
+          placementOptions: [],
+          budgetRanges: [],
+        };
+      }
+
+      return {
+        publicSlug: settings.publicSlug,
+        funnelEnabled: settings.funnelEnabled,
+        funnelWelcomeMessage: settings.funnelWelcomeMessage,
+        styleOptions: settings.styleOptions ? JSON.parse(settings.styleOptions) : [],
+        placementOptions: settings.placementOptions ? JSON.parse(settings.placementOptions) : [],
+        budgetRanges: settings.budgetRanges ? JSON.parse(settings.budgetRanges) : [],
+      };
+    }),
+});
