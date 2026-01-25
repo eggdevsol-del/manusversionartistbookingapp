@@ -712,3 +712,313 @@ export const activeTasksRelations = relations(activeTasks, ({ one }) => ({
 		references: [users.id],
 	}),
 }));
+
+
+// ==========================================
+// CONSULTATION FUNNEL / ARTIST LINK TABLES
+// ==========================================
+
+/**
+ * Artist Public Profile Settings
+ * Stores artist's public link configuration and customization
+ */
+export const artistPublicProfile = mysqlTable("artist_public_profile", {
+	id: int().autoincrement().notNull(),
+	artistId: varchar({ length: 64 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+	
+	// Public link slug (e.g., "pmason" for calendair.app/start/pmason)
+	slug: varchar({ length: 50 }).notNull().unique(),
+	
+	// Profile display settings
+	displayName: varchar({ length: 255 }),
+	tagline: text(), // Short bio/tagline for public profile
+	profileImageUrl: text(),
+	coverImageUrl: text(),
+	
+	// Funnel settings
+	funnelEnabled: tinyint().default(1), // Whether public link is active
+	
+	// Funnel step configuration (JSON array of enabled steps)
+	// Default: ['intent', 'contact', 'style', 'budget', 'availability']
+	enabledSteps: text().default('["intent","contact","style","budget","availability"]'),
+	
+	// Style options available (JSON array)
+	styleOptions: text().default('["realism","traditional","neo-traditional","japanese","blackwork","dotwork","watercolor","geometric","minimalist","other"]'),
+	
+	// Placement options available (JSON array)
+	placementOptions: text().default('["full-sleeve","half-sleeve","forearm","upper-arm","back-piece","chest","ribs","thigh","calf","hand","neck","other"]'),
+	
+	// Budget ranges available (JSON array of {label, min, max})
+	budgetRanges: text().default('[{"label":"Under $500","min":0,"max":500},{"label":"$500-$1,000","min":500,"max":1000},{"label":"$1,000-$2,500","min":1000,"max":2500},{"label":"$2,500-$5,000","min":2500,"max":5000},{"label":"$5,000-$10,000","min":5000,"max":10000},{"label":"$10,000+","min":10000,"max":null}]'),
+	
+	// Availability settings
+	showAvailability: tinyint().default(1),
+	
+	// Analytics
+	totalViews: int().default(0),
+	totalSubmissions: int().default(0),
+	
+	createdAt: timestamp({ mode: 'string' }).default(sql`(now())`),
+	updatedAt: timestamp({ mode: 'string' }).default(sql`(now())`),
+}, (table) => [
+	primaryKey({ columns: [table.id], name: "artist_public_profile_id" }),
+	unique("artist_public_profile_artist").on(table.artistId),
+	index("idx_slug").on(table.slug),
+]);
+
+/**
+ * Leads Table
+ * The single source of truth for all consultation funnel submissions
+ * This is the core entity that drives the Revenue Protection Algorithm
+ */
+export const leads = mysqlTable("leads", {
+	id: int().autoincrement().notNull(),
+	artistId: varchar({ length: 64 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+	
+	// Client info (may or may not have a user account yet)
+	clientId: varchar({ length: 64 }).references(() => users.id, { onDelete: "set null" }),
+	clientName: varchar({ length: 255 }).notNull(),
+	clientEmail: varchar({ length: 320 }).notNull(),
+	clientPhone: varchar({ length: 20 }),
+	
+	// Lead source tracking
+	source: mysqlEnum(['funnel', 'direct_message', 'instagram', 'facebook', 'referral', 'walk_in', 'other']).default('funnel').notNull(),
+	sourceDetails: text(), // Additional source info (e.g., referrer name, ad campaign)
+	funnelSessionId: varchar({ length: 64 }), // Links to funnel_sessions for analytics
+	
+	// Lead status progression
+	status: mysqlEnum([
+		'new',              // Just submitted, not viewed
+		'viewed',           // Artist has seen the lead
+		'contacted',        // Artist has reached out
+		'qualifying',       // In discussion, gathering more info
+		'proposal_sent',    // Proposal/quote sent
+		'proposal_accepted',// Client accepted proposal
+		'deposit_requested',// Deposit has been requested
+		'deposit_pending',  // Deposit claimed but not verified
+		'deposit_verified', // Deposit confirmed
+		'scheduled',        // Appointment booked
+		'completed',        // Work done
+		'lost',             // Lead didn't convert
+		'archived'          // Old/inactive lead
+	]).default('new').notNull(),
+	
+	// Intent/Project details (from funnel)
+	projectType: varchar({ length: 100 }), // e.g., 'full-sleeve', 'back-piece', 'cover-up'
+	projectDescription: text(),
+	
+	// Style preferences
+	stylePreferences: text(), // JSON array of selected styles
+	referenceImages: text(), // JSON array of uploaded image URLs
+	
+	// Size & Budget
+	placement: varchar({ length: 100 }),
+	estimatedSize: varchar({ length: 100 }), // e.g., 'small', 'medium', 'large', 'extra-large'
+	budgetMin: int(), // In cents
+	budgetMax: int(), // In cents
+	budgetLabel: varchar({ length: 100 }), // Human-readable budget range
+	
+	// Availability preferences
+	preferredTimeframe: varchar({ length: 100 }), // e.g., 'asap', '1-3 months', '3-6 months', '6-12 months'
+	preferredMonths: text(), // JSON array of preferred months
+	urgency: mysqlEnum(['flexible', 'moderate', 'urgent']).default('flexible'),
+	
+	// Derived tags (computed from form answers, stored as JSON array)
+	// e.g., ["Full Sleeve", "Est $6k-$8k", "High Priority", "Realism", "2026 Target"]
+	derivedTags: text(),
+	
+	// Priority scoring (computed by algorithm)
+	priorityScore: int().default(0),
+	priorityTier: mysqlEnum(['tier1', 'tier2', 'tier3', 'tier4']).default('tier2'),
+	
+	// Value estimation
+	estimatedValue: int(), // In cents, computed from budget range
+	
+	// Linked entities (created when lead progresses)
+	conversationId: int().references(() => conversations.id, { onDelete: "set null" }),
+	consultationId: int().references(() => consultations.id, { onDelete: "set null" }),
+	appointmentId: int().references(() => appointments.id, { onDelete: "set null" }),
+	
+	// Proposal tracking
+	proposalSentAt: timestamp({ mode: 'string' }),
+	proposalAcceptedAt: timestamp({ mode: 'string' }),
+	proposedDates: text(), // JSON array of proposed date options
+	acceptedDate: datetime({ mode: 'string' }),
+	
+	// Deposit tracking
+	depositAmount: int(), // In cents
+	depositRequestedAt: timestamp({ mode: 'string' }),
+	depositClaimedAt: timestamp({ mode: 'string' }),
+	depositVerifiedAt: timestamp({ mode: 'string' }),
+	depositMethod: mysqlEnum(['stripe', 'paypal', 'bank_transfer', 'cash']),
+	depositProof: text(), // Screenshot URL for bank transfers
+	
+	// Timestamps
+	lastContactedAt: timestamp({ mode: 'string' }),
+	lastActivityAt: timestamp({ mode: 'string' }),
+	convertedAt: timestamp({ mode: 'string' }), // When became a booked appointment
+	lostAt: timestamp({ mode: 'string' }),
+	lostReason: varchar({ length: 255 }),
+	
+	createdAt: timestamp({ mode: 'string' }).default(sql`(now())`),
+	updatedAt: timestamp({ mode: 'string' }).default(sql`(now())`),
+}, (table) => [
+	primaryKey({ columns: [table.id], name: "leads_id" }),
+	index("idx_artist_status").on(table.artistId, table.status),
+	index("idx_artist_priority").on(table.artistId, table.priorityScore),
+	index("idx_client_email").on(table.clientEmail),
+	index("idx_created").on(table.createdAt),
+]);
+
+/**
+ * Funnel Sessions
+ * Tracks each visitor's progress through the funnel
+ * Used for analytics and abandoned funnel recovery
+ */
+export const funnelSessions = mysqlTable("funnel_sessions", {
+	id: varchar({ length: 64 }).notNull(), // UUID
+	artistId: varchar({ length: 64 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+	
+	// Session tracking
+	visitorFingerprint: varchar({ length: 255 }), // For anonymous tracking
+	ipAddress: varchar({ length: 45 }),
+	userAgent: text(),
+	referrer: text(),
+	
+	// Funnel progress
+	currentStep: varchar({ length: 50 }).default('intent'),
+	completedSteps: text().default('[]'), // JSON array of completed step names
+	stepData: text().default('{}'), // JSON object with data from each step
+	
+	// Completion status
+	completed: tinyint().default(0),
+	leadId: int().references(() => leads.id, { onDelete: "set null" }),
+	
+	// Timing
+	startedAt: timestamp({ mode: 'string' }).default(sql`(now())`),
+	lastActivityAt: timestamp({ mode: 'string' }).default(sql`(now())`),
+	completedAt: timestamp({ mode: 'string' }),
+	
+	// Abandonment tracking
+	abandoned: tinyint().default(0),
+	abandonedAt: timestamp({ mode: 'string' }),
+	abandonedStep: varchar({ length: 50 }),
+	recoveryEmailSent: tinyint().default(0),
+	
+	createdAt: timestamp({ mode: 'string' }).default(sql`(now())`),
+}, (table) => [
+	primaryKey({ columns: [table.id], name: "funnel_sessions_id" }),
+	index("idx_artist_session").on(table.artistId),
+	index("idx_abandoned").on(table.abandoned, table.recoveryEmailSent),
+]);
+
+/**
+ * Lead Activity Log
+ * Tracks all activity on a lead for timeline display
+ */
+export const leadActivityLog = mysqlTable("lead_activity_log", {
+	id: int().autoincrement().notNull(),
+	leadId: int().notNull().references(() => leads.id, { onDelete: "cascade" }),
+	
+	activityType: mysqlEnum([
+		'created',
+		'viewed',
+		'status_changed',
+		'contacted',
+		'message_sent',
+		'message_received',
+		'proposal_sent',
+		'proposal_accepted',
+		'proposal_declined',
+		'deposit_requested',
+		'deposit_claimed',
+		'deposit_verified',
+		'appointment_scheduled',
+		'appointment_confirmed',
+		'appointment_completed',
+		'note_added',
+		'tag_added',
+		'tag_removed',
+		'marked_lost',
+		'archived'
+	]).notNull(),
+	
+	// Activity details
+	description: text(),
+	metadata: text(), // JSON object with additional data
+	
+	// Who performed the action
+	performedBy: varchar({ length: 64 }).references(() => users.id, { onDelete: "set null" }),
+	performedByType: mysqlEnum(['artist', 'client', 'system']).default('system'),
+	
+	createdAt: timestamp({ mode: 'string' }).default(sql`(now())`),
+}, (table) => [
+	primaryKey({ columns: [table.id], name: "lead_activity_log_id" }),
+	index("idx_lead_activity").on(table.leadId, table.createdAt),
+]);
+
+// Type exports for funnel tables
+export type InsertArtistPublicProfile = InferInsertModel<typeof artistPublicProfile>;
+export type SelectArtistPublicProfile = InferSelectModel<typeof artistPublicProfile>;
+export type InsertLead = InferInsertModel<typeof leads>;
+export type SelectLead = InferSelectModel<typeof leads>;
+export type InsertFunnelSession = InferInsertModel<typeof funnelSessions>;
+export type SelectFunnelSession = InferSelectModel<typeof funnelSessions>;
+export type InsertLeadActivityLog = InferInsertModel<typeof leadActivityLog>;
+export type SelectLeadActivityLog = InferSelectModel<typeof leadActivityLog>;
+
+// Relations for funnel tables
+export const artistPublicProfileRelations = relations(artistPublicProfile, ({ one }) => ({
+	artist: one(users, {
+		fields: [artistPublicProfile.artistId],
+		references: [users.id],
+	}),
+}));
+
+export const leadsRelations = relations(leads, ({ one, many }) => ({
+	artist: one(users, {
+		fields: [leads.artistId],
+		references: [users.id],
+		relationName: "artist_leads"
+	}),
+	client: one(users, {
+		fields: [leads.clientId],
+		references: [users.id],
+		relationName: "client_leads"
+	}),
+	conversation: one(conversations, {
+		fields: [leads.conversationId],
+		references: [conversations.id],
+	}),
+	consultation: one(consultations, {
+		fields: [leads.consultationId],
+		references: [consultations.id],
+	}),
+	appointment: one(appointments, {
+		fields: [leads.appointmentId],
+		references: [appointments.id],
+	}),
+	activityLog: many(leadActivityLog),
+}));
+
+export const funnelSessionsRelations = relations(funnelSessions, ({ one }) => ({
+	artist: one(users, {
+		fields: [funnelSessions.artistId],
+		references: [users.id],
+	}),
+	lead: one(leads, {
+		fields: [funnelSessions.leadId],
+		references: [leads.id],
+	}),
+}));
+
+export const leadActivityLogRelations = relations(leadActivityLog, ({ one }) => ({
+	lead: one(leads, {
+		fields: [leadActivityLog.leadId],
+		references: [leads.id],
+	}),
+	performer: one(users, {
+		fields: [leadActivityLog.performedBy],
+		references: [users.id],
+	}),
+}));
