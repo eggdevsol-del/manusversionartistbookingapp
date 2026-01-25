@@ -230,7 +230,7 @@ export function registerPublicFunnelRoutes(app: Express) {
           const updateData: any = {};
           if (clientName) updateData.name = clientName;
           if (contact.phone) updateData.phone = contact.phone;
-          if (contact.birthdate) updateData.birthdate = contact.birthdate;
+          if (contact.birthdate) updateData.birthday = contact.birthdate;
           
           if (Object.keys(updateData).length > 0) {
             await db.update(schema.users)
@@ -247,6 +247,7 @@ export function registerPublicFunnelRoutes(app: Express) {
             name: clientName,
             email: contact.email.toLowerCase(),
             phone: contact.phone || null,
+            birthday: contact.birthdate || null,
             role: 'client',
             loginMethod: 'funnel',
             hasCompletedOnboarding: 0,
