@@ -228,9 +228,16 @@ export default function FunnelWrapper({ artistSlug }: FunnelWrapperProps) {
         
         if (response.ok) {
           const result = await response.json();
+          console.log('[Funnel] Upload response:', JSON.stringify(result));
           if (result.result?.data?.json?.url) {
             uploadedUrls.push(result.result.data.json.url);
+            console.log('[Funnel] Successfully uploaded:', result.result.data.json.url);
+          } else {
+            console.error('[Funnel] Upload succeeded but no URL in response:', result);
           }
+        } else {
+          const errorText = await response.text();
+          console.error('[Funnel] Upload failed:', response.status, errorText);
         }
       } catch (err) {
         console.error('[Funnel] Image upload error:', err);
