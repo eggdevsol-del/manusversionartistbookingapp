@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -100,9 +100,13 @@ export default function Dashboard() {
     const [showSnapshotModal, setShowSnapshotModal] = useState(false);
     const [taskStartTime, setTaskStartTime] = useState<string | null>(null);
 
-    // Show weekly snapshot on mount if needed
+    // Track if snapshot was already shown in this session
+    const snapshotShownThisSession = useRef(false);
+
+    // Show weekly snapshot on mount if needed (only once per session)
     useEffect(() => {
-        if (showSnapshot) {
+        if (showSnapshot && !snapshotShownThisSession.current) {
+            snapshotShownThisSession.current = true;
             setShowSnapshotModal(true);
         }
     }, [showSnapshot]);

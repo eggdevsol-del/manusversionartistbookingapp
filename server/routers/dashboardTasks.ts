@@ -392,9 +392,29 @@ export const dashboardTasksRouter = router({
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database connection failed" });
       }
 
-      await db.update(schema.dashboardSettings)
-        .set({ lastSnapshotShownAt: new Date().toISOString() })
-        .where(eq(schema.dashboardSettings.artistId, user.id));
+      const now = new Date().toISOString();
+      
+      // Check if settings row exists
+      const existing = await db.query.dashboardSettings.findFirst({
+        where: eq(schema.dashboardSettings.artistId, user.id)
+      });
+      
+      if (existing) {
+        // Update existing row
+        await db.update(schema.dashboardSettings)
+          .set({ lastSnapshotShownAt: now, updatedAt: now })
+          .where(eq(schema.dashboardSettings.artistId, user.id));
+      } else {
+        // Create new row with lastSnapshotShownAt set
+        await db.insert(schema.dashboardSettings).values({
+          artistId: user.id,
+          maxVisibleTasks: 10,
+          goalAdvancedBookingMonths: 3,
+          preferredEmailClient: 'default',
+          showWeeklySnapshot: 1,
+          lastSnapshotShownAt: now
+        });
+      }
 
       return { success: true };
     }),

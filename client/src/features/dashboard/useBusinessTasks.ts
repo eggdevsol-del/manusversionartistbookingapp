@@ -237,14 +237,20 @@ export function useWeeklySnapshot() {
   
   const dismissMutation = trpc.dashboardTasks.dismissWeeklySnapshot.useMutation({
     onSuccess: () => {
-      // Invalidate the shouldShow query so it returns false
-      utils.dashboardTasks.shouldShowWeeklySnapshot.invalidate();
+      // Immediately set shouldShow to false to prevent re-showing
+      utils.dashboardTasks.shouldShowWeeklySnapshot.setData(undefined, { shouldShow: false });
     }
   });
 
   const dismiss = useCallback(async () => {
-    await dismissMutation.mutateAsync();
-  }, [dismissMutation]);
+    try {
+      await dismissMutation.mutateAsync();
+    } catch (error) {
+      // Even if server fails, prevent re-showing in this session
+      utils.dashboardTasks.shouldShowWeeklySnapshot.setData(undefined, { shouldShow: false });
+      console.error('Failed to dismiss snapshot:', error);
+    }
+  }, [dismissMutation, utils]);
 
   // Function to manually trigger showing the snapshot (for the button)
   const showManually = useCallback(() => {
