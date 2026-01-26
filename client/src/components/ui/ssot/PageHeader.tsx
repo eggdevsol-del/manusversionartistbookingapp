@@ -6,6 +6,7 @@
  * 
  * Features:
  * - Left-aligned title
+ * - Optional subtitle (e.g., version number)
  * - Fixed positioning at top of screen
  * - Consistent title size and placement
  * - Safe area inset handling
@@ -18,6 +19,8 @@ import { cn } from "@/lib/utils";
 interface PageHeaderProps {
     /** Page title - rendered with consistent SSOT styling */
     title: string;
+    /** Optional subtitle - displayed next to title (e.g., version number) */
+    subtitle?: string;
     /** Additional classes for the header container */
     className?: string;
 }
@@ -27,8 +30,9 @@ interface PageHeaderProps {
  * 
  * @example
  * <PageHeader title="Dashboard" />
+ * <PageHeader title="Settings" subtitle="v1.0.119" />
  */
-export function PageHeader({ title, className }: PageHeaderProps) {
+export function PageHeader({ title, subtitle, className }: PageHeaderProps) {
     return (
         <header
             className={cn(
@@ -40,6 +44,11 @@ export function PageHeader({ title, className }: PageHeaderProps) {
             <h1 className="text-2xl font-bold text-foreground">
                 {title}
             </h1>
+            {subtitle && (
+                <span className="ml-2 text-sm font-medium text-muted-foreground/60">
+                    {subtitle}
+                </span>
+            )}
         </header>
     );
 }

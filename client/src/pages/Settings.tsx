@@ -407,8 +407,11 @@ export default function Settings() {
   // --- Main View ---
   return (
     <PageShell>
-      {/* 1. Page Header - Left aligned, no icons */}
-      <PageHeader title="Settings" />
+      {/* 1. Page Header - Left aligned, with version number */}
+      <PageHeader 
+        title="Settings" 
+        subtitle={`v${import.meta.env.VITE_APP_VERSION || '1.0.119'}`}
+      />
 
       {/* 2. Top Context Area (Profile Summary) */}
       <div className="px-6 pt-4 pb-8 z-10 shrink-0 flex flex-col justify-center h-[20vh] opacity-80">
