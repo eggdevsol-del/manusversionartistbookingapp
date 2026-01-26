@@ -10,7 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { BookingWizard } from "@/features/booking/BookingWizard";
-import { ProposalSheet } from "@/components/proposals/ProposalSheet";
+// ProposalSheet removed - not needed
 import { ClientProfileSheet } from "@/features/chat/ClientProfileSheet";
 import { ProjectProposalMessage } from "@/components/chat/ProjectProposalMessage";
 import { ProjectProposalModal } from "@/features/chat/components/ProjectProposalModal";
@@ -103,11 +103,6 @@ export default function Chat() {
     setShowBookingCalendar(true);
   }, [setShowBookingCalendar]);
 
-  const handleProposalClick = useCallback(() => {
-    console.log('[Chat] Proposal button clicked');
-    setShowProjectWizard(true);
-  }, [setShowProjectWizard]);
-
   // Register Bottom Nav Contextual Row (Quick Actions + System Actions)
   const quickActionsRow = useMemo(() => {
     const isAuthorized = user?.role === 'artist' || user?.role === 'admin';
@@ -119,13 +114,6 @@ export default function Chat() {
         label: 'Book',
         icon: Calendar,
         onClick: handleBookClick,
-        highlight: true
-      },
-      {
-        id: 'chat.proposal',
-        label: 'Proposal',
-        icon: FileText,
-        onClick: handleProposalClick,
         highlight: true
       }
     ] : [];
@@ -156,7 +144,7 @@ export default function Chat() {
     return (
       <QuickActionsRow actions={allActions} />
     );
-  }, [user?.role, quickActions, handleQuickAction, handleBookClick, handleProposalClick]);
+  }, [user?.role, quickActions, handleQuickAction, handleBookClick]);
 
   useRegisterBottomNavRow("chat-actions", quickActionsRow);
 
@@ -457,15 +445,6 @@ export default function Chat() {
           setShowBookingCalendar(false);
           toast.success('Booking proposal sent!');
         }}
-      />
-
-      {/* Proposal Sheet - Uses existing SSOT component with its own FullScreenSheet */}
-      <ProposalSheet
-        isOpen={showProjectWizard}
-        onClose={() => setShowProjectWizard(false)}
-        clientId={conversation?.otherUser?.id}
-        clientName={otherUserName}
-        clientEmail={conversation?.otherUser?.email}
       />
 
       {/* Client Confirm Dates Dialog */}
