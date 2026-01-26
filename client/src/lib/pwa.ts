@@ -13,8 +13,8 @@ export async function registerServiceWorker() {
     const updateSW = registerSW({
       immediate: true,
       onNeedRefresh() {
-        console.log('[PWA] New content available! Updating immediately...');
-        // Update immediately without user interaction
+        console.log('[PWA] New content available, refreshing...');
+        // Refresh to get new content
         updateSW(true);
       },
       onOfflineReady() {
@@ -24,28 +24,12 @@ export async function registerServiceWorker() {
         console.log('[PWA] Service Worker registered successfully');
         
         if (registration) {
-          // Check for updates immediately on registration
-          registration.update().catch(err => {
-            console.error('[PWA] Initial update check failed:', err);
-          });
-          
-          // Check for updates every 30 seconds (more aggressive)
+          // Check for updates every 60 seconds
           setInterval(() => {
-            console.log('[PWA] Checking for updates...');
             registration.update().catch(err => {
               console.error('[PWA] Update check failed:', err);
             });
-          }, 30000);
-          
-          // Also check when the page becomes visible
-          document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-              console.log('[PWA] Page visible, checking for updates...');
-              registration.update().catch(err => {
-                console.error('[PWA] Visibility update check failed:', err);
-              });
-            }
-          });
+          }, 60000);
         }
       },
       onRegisterError(error) {

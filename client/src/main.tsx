@@ -81,62 +81,9 @@ createRoot(document.getElementById("root")!).render(
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || '0.0.0';
 console.log('[App] Starting version:', APP_VERSION);
 
-// Check for version mismatch by fetching a version endpoint
-async function checkForUpdates() {
-  try {
-    // Fetch version from server with cache-busting
-    const response = await fetch(`/api/version?t=${Date.now()}`, {
-      cache: 'no-store',
-      headers: { 'Cache-Control': 'no-cache' }
-    });
-    
-    if (response.ok) {
-      const data = await response.json();
-      const serverVersion = data.version;
-      
-      console.log('[App] Server version:', serverVersion);
-      console.log('[App] Client version:', APP_VERSION);
-      
-      if (serverVersion && serverVersion !== APP_VERSION) {
-        console.log('[App] Version mismatch! Forcing update...');
-        
-        // Clear all caches
-        if ('caches' in window) {
-          const cacheNames = await caches.keys();
-          await Promise.all(cacheNames.map(name => caches.delete(name)));
-          console.log('[App] Cleared', cacheNames.length, 'caches');
-        }
-        
-        // Unregister service workers
-        if ('serviceWorker' in navigator) {
-          const registrations = await navigator.serviceWorker.getRegistrations();
-          await Promise.all(registrations.map(r => r.unregister()));
-          console.log('[App] Unregistered', registrations.length, 'service workers');
-        }
-        
-        // Force reload
-        window.location.reload();
-        return;
-      }
-    }
-  } catch (err) {
-    console.error('[App] Version check failed:', err);
-  }
-}
-
 // Register service worker for PWA
 if (import.meta.env.PROD) {
   registerServiceWorker();
-  
-  // Check for updates on load
-  checkForUpdates();
-  
-  // Also check when page becomes visible
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      checkForUpdates();
-    }
-  });
 }
 
 // Initialize OneSignal for push notifications
