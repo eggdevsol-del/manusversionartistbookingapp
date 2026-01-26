@@ -160,8 +160,19 @@
 
   html {
     height: 100%;
+  }
+
+  /* Fixed background layer - works on iOS Safari where background-attachment: fixed doesn't */
+  html::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: -1;
     background: var(--bg-gradient);
-    background-attachment: fixed;
+    pointer-events: none;
   }
 
   body {
