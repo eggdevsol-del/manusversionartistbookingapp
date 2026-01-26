@@ -20,6 +20,58 @@
 
 <body>
   <div id="root"></div>
+  
+  <!-- Cache Buster: Forces update when version changes -->
+  <script>
+    (function() {
+      var CURRENT_VERSION = '%VITE_APP_VERSION%';
+      var STORED_VERSION_KEY = 'app_version';
+      var storedVersion = localStorage.getItem(STORED_VERSION_KEY);
+      
+      console.log('[CacheBuster] Current version:', CURRENT_VERSION);
+      console.log('[CacheBuster] Stored version:', storedVersion);
+      
+      // If version mismatch, clear everything and reload
+      if (storedVersion && storedVersion !== CURRENT_VERSION && CURRENT_VERSION !== '%' + 'VITE_APP_VERSION%') {
+        console.log('[CacheBuster] Version mismatch detected! Clearing caches...');
+        
+        // Clear all caches
+        if ('caches' in window) {
+          caches.keys().then(function(names) {
+            names.forEach(function(name) {
+              console.log('[CacheBuster] Deleting cache:', name);
+              caches.delete(name);
+            });
+          });
+        }
+        
+        // Unregister service workers
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            registrations.forEach(function(registration) {
+              console.log('[CacheBuster] Unregistering SW');
+              registration.unregister();
+            });
+          });
+        }
+        
+        // Update stored version
+        localStorage.setItem(STORED_VERSION_KEY, CURRENT_VERSION);
+        
+        // Force reload after a brief delay to allow cache clearing
+        setTimeout(function() {
+          console.log('[CacheBuster] Reloading page...');
+          window.location.reload(true);
+        }, 500);
+      } else {
+        // Store current version
+        if (CURRENT_VERSION !== '%' + 'VITE_APP_VERSION%') {
+          localStorage.setItem(STORED_VERSION_KEY, CURRENT_VERSION);
+        }
+      }
+    })();
+  </script>
+  
   <script type="module" src="/src/main.tsx"></script>
   <script defer src="%VITE_ANALYTICS_ENDPOINT%/umami" data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"></script>
 </body>

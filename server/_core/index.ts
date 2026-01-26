@@ -71,6 +71,19 @@ async function startServer() {
   // Public funnel API routes (no auth required)
   registerPublicFunnelRoutes(app);
 
+  // Version endpoint for cache-busting (returns current server version)
+  // This is used by the client to detect version mismatches and force updates
+  const packageJson = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf-8'));
+  app.get('/api/version', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.json({ 
+      version: packageJson.version,
+      timestamp: Date.now()
+    });
+  });
+
   // File serving endpoint - handle full paths with subdirectories
   app.get("/api/files/*", async (req, res) => {
     try {
