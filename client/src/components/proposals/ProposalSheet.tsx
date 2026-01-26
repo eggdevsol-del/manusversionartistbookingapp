@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import { FullScreenSheet, SheetHeader, LoadingState } from '../ui/ssot';
 import { Calendar, Clock, DollarSign, Send, Plus, Trash2 } from 'lucide-react';
-import { trpc } from '../../utils/trpc';
+import { trpc } from '@/lib/trpc';
 
 interface ProposalSheetProps {
   isOpen: boolean;

@@ -6,10 +6,11 @@ import { DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+// Tabs removed - using existing components
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { BookingWizard } from "@/features/booking/BookingWizard";
+import { ProposalSheet } from "@/components/proposals/ProposalSheet";
 import { ClientProfileSheet } from "@/features/chat/ClientProfileSheet";
 import { ProjectProposalMessage } from "@/components/chat/ProjectProposalMessage";
 import { ProjectProposalModal } from "@/features/chat/components/ProjectProposalModal";
@@ -36,6 +37,7 @@ export default function Chat() {
     messages,
     messagesLoading,
     quickActions,
+    artistSettings,
     availableServices,
 
     // State
@@ -444,67 +446,27 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* Booking Calendar Bottom Sheet */}
-      <BottomSheet
+      {/* Booking Wizard - Uses existing SSOT component with its own FullScreenSheet */}
+      <BookingWizard
         isOpen={showBookingCalendar}
         onClose={() => setShowBookingCalendar(false)}
-        title="Select Date"
-      >
-        <DialogTitle className="sr-only">Select Booking Date</DialogTitle>
-        <BookingWizard
-          conversationId={conversationId}
-          clientId={conversation.clientId}
-          onComplete={() => setShowBookingCalendar(false)}
-        />
-      </BottomSheet>
+        conversationId={conversationId}
+        artistServices={availableServices || []}
+        artistSettings={artistSettings}
+        onBookingSuccess={() => {
+          setShowBookingCalendar(false);
+          toast.success('Booking proposal sent!');
+        }}
+      />
 
-      {/* Project Wizard Bottom Sheet */}
-      <BottomSheet
+      {/* Proposal Sheet - Uses existing SSOT component with its own FullScreenSheet */}
+      <ProposalSheet
         isOpen={showProjectWizard}
         onClose={() => setShowProjectWizard(false)}
-        title="Create Proposal"
-      >
-        <DialogTitle className="sr-only">Create Project Proposal</DialogTitle>
-        <div className="p-4">
-          <Tabs defaultValue="details" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-4">
-              <TabsTrigger value="details">Details</TabsTrigger>
-              <TabsTrigger value="pricing">Pricing</TabsTrigger>
-            </TabsList>
-            <TabsContent value="details" className="space-y-4">
-              <div className="space-y-2">
-                <Label>Project Title</Label>
-                <Input placeholder="e.g., Full Sleeve Japanese Design" />
-              </div>
-              <div className="space-y-2">
-                <Label>Description</Label>
-                <Input placeholder="Brief description of the project" />
-              </div>
-              <div className="space-y-2">
-                <Label>Estimated Sessions</Label>
-                <Input type="number" placeholder="3" min={1} />
-              </div>
-            </TabsContent>
-            <TabsContent value="pricing" className="space-y-4">
-              <div className="space-y-2">
-                <Label>Total Price ($)</Label>
-                <Input type="number" placeholder="2500" min={0} />
-              </div>
-              <div className="space-y-2">
-                <Label>Deposit Required ($)</Label>
-                <Input type="number" placeholder="500" min={0} />
-              </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox id="deposit-required" />
-                <Label htmlFor="deposit-required" className="text-sm">Require deposit before booking</Label>
-              </div>
-            </TabsContent>
-          </Tabs>
-          <Button className="w-full mt-6" onClick={() => setShowProjectWizard(false)}>
-            Send Proposal
-          </Button>
-        </div>
-      </BottomSheet>
+        clientId={conversation?.otherUser?.id}
+        clientName={otherUserName}
+        clientEmail={conversation?.otherUser?.email}
+      />
 
       {/* Client Confirm Dates Dialog */}
       <BottomSheet
