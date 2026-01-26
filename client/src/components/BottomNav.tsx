@@ -8,6 +8,10 @@
  * The nav has a FIXED height. Swipe up/down swaps which row is visible,
  * NOT expanding like a drawer.
  * 
+ * CRITICAL: Row 1 (contextual actions) must NOT have any gesture handlers
+ * that could interfere with button touch events. The NavActionButton SSOT
+ * component has full authority over its touch events.
+ * 
  * See docs/bottom-nav.md for full architecture documentation.
  */
 
@@ -181,12 +185,25 @@ export default function BottomNav() {
                         })}
                     </div>
 
-                    {/* Row 1: Contextual Actions - Removed snap behavior, added touch-action */}
+                    {/* 
+                     * Row 1: Contextual Actions
+                     * 
+                     * CRITICAL: This container must NOT have any touch/pointer event handlers.
+                     * The NavActionButton SSOT component has full authority over touch events.
+                     * 
+                     * - NO onTouchStart/onTouchEnd/onTouchMove
+                     * - NO onPointerDown/onPointerUp/onPointerMove
+                     * - NO gesture libraries wrapping this container
+                     * - touchAction: auto to let buttons handle their own events
+                     */}
                     <div 
-                        className="w-full overflow-x-auto no-scrollbar overscroll-x-contain flex items-center shrink-0 border-t border-gray-200 dark:border-white/5"
+                        className="w-full overflow-x-auto no-scrollbar flex items-center shrink-0 border-t border-gray-200 dark:border-white/5"
                         style={{ 
                             height: ROW_HEIGHT,
-                            touchAction: 'pan-x',  // Allow horizontal scroll but prioritize button taps
+                            // CRITICAL: Let child buttons handle their own touch events
+                            touchAction: 'auto',
+                            // Ensure scroll doesn't capture taps
+                            overscrollBehaviorX: 'contain',
                         }}
                     >
                         {contextualRow}
