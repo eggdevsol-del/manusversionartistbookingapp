@@ -128,7 +128,7 @@ export function FullScreenSheet({
                     </div>
 
                     {/* 3. Glass Sheet Container */}
-                    <div className="flex-1 z-20 flex flex-col bg-white/5 backdrop-blur-2xl rounded-t-[2.5rem] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.02)] overflow-hidden relative">
+                    <div className="flex-1 z-20 flex flex-col bg-card backdrop-blur-2xl rounded-t-[2.5rem] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.02)] overflow-hidden relative">
                         {/* Top Edge Highlight */}
                         <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-l from-white/20 to-transparent opacity-50 pointer-events-none" />
 

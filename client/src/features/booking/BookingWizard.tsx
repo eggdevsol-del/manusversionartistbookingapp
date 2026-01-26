@@ -44,7 +44,7 @@ function SelectableCard({
                 "p-4 border rounded-xl transition-all duration-300 cursor-pointer flex items-center justify-between group",
                 selected
                     ? "bg-primary/10 border-primary/50"
-                    : "bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20"
+                    : "bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 hover:bg-black/10 dark:hover:bg-white/10 hover:border-black/20 dark:hover:border-white/20"
             )}
             onClick={onClick}
         >
@@ -60,7 +60,7 @@ function SelectableCard({
                 "w-8 h-8 rounded-full flex items-center justify-center border transition-all ml-4",
                 selected
                     ? "bg-primary border-primary text-primary-foreground"
-                    : "bg-transparent border-white/20 text-transparent group-hover:border-white/40"
+                    : "bg-transparent border-black/20 dark:border-white/20 text-transparent group-hover:border-black/40 dark:group-hover:border-white/40"
             )}>
                 {rightElement || <Check className="w-4 h-4" />}
             </div>
@@ -186,8 +186,8 @@ export function BookingWizard({ isOpen, onClose, conversationId, artistServices,
             case 'frequency':
                 return (
                     <div>
-                        <p className="text-lg font-bold text-primary">{selectedService?.name}</p>
-                        <p className="text-sm text-muted-foreground">{selectedService?.duration}min • ${selectedService?.price}</p>
+                        <p className="text-lg font-bold text-white">{selectedService?.name}</p>
+                        <p className="text-sm text-white/70">{selectedService?.duration}min • ${selectedService?.price}</p>
                     </div>
                 );
             case 'review':
