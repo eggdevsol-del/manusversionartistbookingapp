@@ -422,22 +422,18 @@ export const dashboardTasksRouter = router({
         return { shouldShow: false };
       }
 
-      // Show on Monday if not shown this week
+      // Show once per week if not shown in the last 7 days
       const now = new Date();
-      const dayOfWeek = now.getDay();
       
-      if (dayOfWeek !== 1) {
-        // Not Monday
-        return { shouldShow: false };
-      }
-
       if (!settings.lastSnapshotShownAt) {
+        // Never shown before - show it
         return { shouldShow: true };
       }
-
+      
       const lastShown = new Date(settings.lastSnapshotShownAt);
       const daysSinceShown = (now.getTime() - lastShown.getTime()) / (1000 * 60 * 60 * 24);
-
+      
+      // Only show if it's been at least 7 days since last shown
       return { shouldShow: daysSinceShown >= 7 };
     }),
 

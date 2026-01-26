@@ -223,22 +223,41 @@ export function useBusinessTasks() {
  * Hook for weekly analytics snapshot
  */
 export function useWeeklySnapshot() {
-  const { data: shouldShow } = trpc.dashboardTasks.shouldShowWeeklySnapshot.useQuery();
+  const utils = trpc.useUtils();
+  
+  const { data: shouldShow, refetch: refetchShouldShow } = trpc.dashboardTasks.shouldShowWeeklySnapshot.useQuery(undefined, {
+    // Don't refetch on window focus to prevent re-showing after dismiss
+    refetchOnWindowFocus: false,
+    staleTime: 1000 * 60 * 60, // 1 hour
+  });
+  
   const { data: snapshot, isLoading } = trpc.dashboardTasks.getWeeklySnapshot.useQuery(undefined, {
     enabled: shouldShow?.shouldShow === true
   });
   
-  const dismissMutation = trpc.dashboardTasks.dismissWeeklySnapshot.useMutation();
+  const dismissMutation = trpc.dashboardTasks.dismissWeeklySnapshot.useMutation({
+    onSuccess: () => {
+      // Invalidate the shouldShow query so it returns false
+      utils.dashboardTasks.shouldShowWeeklySnapshot.invalidate();
+    }
+  });
 
   const dismiss = useCallback(async () => {
     await dismissMutation.mutateAsync();
   }, [dismissMutation]);
 
+  // Function to manually trigger showing the snapshot (for the button)
+  const showManually = useCallback(() => {
+    // This just returns true to allow manual display
+    // The actual display is controlled by the component
+  }, []);
+
   return {
     shouldShow: shouldShow?.shouldShow || false,
     snapshot,
     isLoading,
-    dismiss
+    dismiss,
+    refetch: refetchShouldShow
   };
 }
 
