@@ -29,7 +29,27 @@ export const SOLID_COLORS: ColorOption[] = [
   { id: 'cream', name: 'Cream', value: '#f5f5dc', textColor: 'black' },
   { id: 'lavender', name: 'Lavender', value: '#e6e6fa', textColor: 'black' },
   { id: 'mint', name: 'Mint', value: '#98fb98', textColor: 'black' },
+  { id: 'custom', name: 'Custom', value: '#000000', textColor: 'white' }, // Placeholder - actual value set by user
 ];
+
+// Custom color interface for user-defined colors
+export interface CustomColorConfig {
+  enabled: boolean;
+  value: string;
+  textColor: 'white' | 'black';
+}
+
+// Helper to determine if a color is light or dark for text contrast
+export function getContrastTextColor(hexColor: string): 'white' | 'black' {
+  // Remove # if present
+  const hex = hexColor.replace('#', '');
+  const r = parseInt(hex.substr(0, 2), 16);
+  const g = parseInt(hex.substr(2, 2), 16);
+  const b = parseInt(hex.substr(4, 2), 16);
+  // Calculate relative luminance
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.5 ? 'black' : 'white';
+}
 
 // ==========================================
 // GRADIENT PALETTE

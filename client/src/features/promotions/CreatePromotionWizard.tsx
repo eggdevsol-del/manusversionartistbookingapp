@@ -2,20 +2,22 @@
  * CreatePromotionWizard - SSOT Compliant
  * 
  * Multi-step wizard for creating gift vouchers, discount cards, and credits.
- * Allows full customization of templates, colors, gradients, and branding.
+ * Allows full customization of templates, colors, gradients, branding,
+ * custom background images with live resize, and logo upload.
  * 
- * @version 1.0.0
+ * @version 1.1.0
  */
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { FullScreenSheet } from "@/components/ui/ssot";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { Gift, Percent, CreditCard, Check, ChevronRight, Upload, X } from "lucide-react";
+import { Gift, Percent, CreditCard, Check, ChevronRight, Upload, X, Image as ImageIcon, Palette, ZoomIn, Move } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { PromotionCard, PromotionCardData } from "./PromotionCard";
@@ -25,10 +27,9 @@ import {
   GRADIENTS,
   CARD_TEMPLATES,
   getTypeDefaults,
-  ColorOption,
-  GradientOption,
-  CardTemplate,
+  getContrastTextColor,
 } from "./cardTemplates";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 type WizardStep = 'type' | 'value' | 'design' | 'preview';
 
@@ -45,6 +46,7 @@ export function CreatePromotionWizard({
   defaultType = 'voucher',
   onSuccess,
 }: CreatePromotionWizardProps) {
+  const { user } = useAuth();
   const [step, setStep] = useState<WizardStep>('type');
   
   // Form state
@@ -54,14 +56,28 @@ export function CreatePromotionWizard({
   const [valueType, setValueType] = useState<'fixed' | 'percentage'>('fixed');
   const [value, setValue] = useState('');
   const [templateDesign, setTemplateDesign] = useState('classic');
-  const [colorMode, setColorMode] = useState<'solid' | 'gradient'>('gradient');
+  const [colorMode, setColorMode] = useState<'solid' | 'gradient' | 'custom'>('gradient');
   const [primaryColor, setPrimaryColor] = useState<string | null>(null);
   const [gradientId, setGradientId] = useState<string>('gold_shimmer');
+  const [customColor, setCustomColor] = useState('#667eea');
   const [customText, setCustomText] = useState('');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
+  const [backgroundScale, setBackgroundScale] = useState(1);
+  const [backgroundPositionX, setBackgroundPositionX] = useState(50);
+  const [backgroundPositionY, setBackgroundPositionY] = useState(50);
+  
+  // Upload states
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingBackground, setUploadingBackground] = useState(false);
+  
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const backgroundInputRef = useRef<HTMLInputElement>(null);
   
   const utils = trpc.useUtils();
+  
+  // Get artist name for display on card
+  const artistName = user?.name || 'Artist';
   
   // Create mutation
   const createMutation = trpc.promotions.createTemplate.useMutation({
@@ -72,9 +88,87 @@ export function CreatePromotionWizard({
       onClose();
     },
     onError: (error) => {
+      console.error('[CreatePromotionWizard] Create error:', error);
       toast.error(error.message || 'Failed to create promotion');
     },
   });
+  
+  // Upload mutation
+  const uploadMutation = trpc.upload.uploadImage.useMutation();
+  
+  // Handle logo upload
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+    
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be less than 5MB');
+      return;
+    }
+    
+    setUploadingLogo(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = reader.result as string;
+        const result = await uploadMutation.mutateAsync({
+          base64,
+          filename: file.name,
+          folder: 'promotion-logos',
+        });
+        setLogoUrl(result.url);
+        toast.success('Logo uploaded!');
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('[CreatePromotionWizard] Logo upload error:', error);
+      toast.error('Failed to upload logo');
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+  
+  // Handle background upload
+  const handleBackgroundUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+    
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Image must be less than 10MB');
+      return;
+    }
+    
+    setUploadingBackground(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = reader.result as string;
+        const result = await uploadMutation.mutateAsync({
+          base64,
+          filename: file.name,
+          folder: 'promotion-backgrounds',
+        });
+        setBackgroundImageUrl(result.url);
+        toast.success('Background uploaded!');
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('[CreatePromotionWizard] Background upload error:', error);
+      toast.error('Failed to upload background');
+    } finally {
+      setUploadingBackground(false);
+    }
+  };
   
   // Step navigation
   const goNext = () => {
@@ -112,11 +206,16 @@ export function CreatePromotionWizard({
     valueType,
     value: valueType === 'fixed' ? (parseFloat(value) || 0) * 100 : parseInt(value) || 0,
     templateDesign,
-    primaryColor: colorMode === 'solid' ? primaryColor : null,
+    primaryColor: colorMode === 'solid' ? primaryColor : (colorMode === 'custom' ? 'custom' : null),
     gradientFrom: colorMode === 'gradient' ? gradientId : null,
     customText: customText || null,
+    customColor: colorMode === 'custom' ? customColor : undefined,
     logoUrl,
     backgroundImageUrl,
+    backgroundScale,
+    backgroundPositionX,
+    backgroundPositionY,
+    artistName,
     status: 'active',
   };
   
@@ -129,12 +228,15 @@ export function CreatePromotionWizard({
       valueType,
       value: valueType === 'fixed' ? Math.round((parseFloat(value) || 0) * 100) : parseInt(value) || 0,
       templateDesign,
-      primaryColor: colorMode === 'solid' ? primaryColor : null,
+      primaryColor: colorMode === 'solid' ? primaryColor : (colorMode === 'custom' ? customColor : null),
       gradientFrom: colorMode === 'gradient' ? gradientId : null,
       gradientTo: null,
       customText: customText || null,
       logoUrl,
       backgroundImageUrl,
+      backgroundScale,
+      backgroundPositionX,
+      backgroundPositionY,
     });
   };
   
@@ -212,8 +314,26 @@ export function CreatePromotionWizard({
               setPrimaryColor={setPrimaryColor}
               gradientId={gradientId}
               setGradientId={setGradientId}
+              customColor={customColor}
+              setCustomColor={setCustomColor}
               customText={customText}
               setCustomText={setCustomText}
+              logoUrl={logoUrl}
+              setLogoUrl={setLogoUrl}
+              backgroundImageUrl={backgroundImageUrl}
+              setBackgroundImageUrl={setBackgroundImageUrl}
+              backgroundScale={backgroundScale}
+              setBackgroundScale={setBackgroundScale}
+              backgroundPositionX={backgroundPositionX}
+              setBackgroundPositionX={setBackgroundPositionX}
+              backgroundPositionY={backgroundPositionY}
+              setBackgroundPositionY={setBackgroundPositionY}
+              uploadingLogo={uploadingLogo}
+              uploadingBackground={uploadingBackground}
+              handleLogoUpload={handleLogoUpload}
+              handleBackgroundUpload={handleBackgroundUpload}
+              logoInputRef={logoInputRef}
+              backgroundInputRef={backgroundInputRef}
               previewData={previewData}
             />
           )}
@@ -449,21 +569,57 @@ function DesignCustomizationStep({
   setPrimaryColor,
   gradientId,
   setGradientId,
+  customColor,
+  setCustomColor,
   customText,
   setCustomText,
+  logoUrl,
+  setLogoUrl,
+  backgroundImageUrl,
+  setBackgroundImageUrl,
+  backgroundScale,
+  setBackgroundScale,
+  backgroundPositionX,
+  setBackgroundPositionX,
+  backgroundPositionY,
+  setBackgroundPositionY,
+  uploadingLogo,
+  uploadingBackground,
+  handleLogoUpload,
+  handleBackgroundUpload,
+  logoInputRef,
+  backgroundInputRef,
   previewData,
 }: {
   type: PromotionType;
   templateDesign: string;
   setTemplateDesign: (v: string) => void;
-  colorMode: 'solid' | 'gradient';
-  setColorMode: (v: 'solid' | 'gradient') => void;
+  colorMode: 'solid' | 'gradient' | 'custom';
+  setColorMode: (v: 'solid' | 'gradient' | 'custom') => void;
   primaryColor: string | null;
   setPrimaryColor: (v: string | null) => void;
   gradientId: string;
   setGradientId: (v: string) => void;
+  customColor: string;
+  setCustomColor: (v: string) => void;
   customText: string;
   setCustomText: (v: string) => void;
+  logoUrl: string | null;
+  setLogoUrl: (v: string | null) => void;
+  backgroundImageUrl: string | null;
+  setBackgroundImageUrl: (v: string | null) => void;
+  backgroundScale: number;
+  setBackgroundScale: (v: number) => void;
+  backgroundPositionX: number;
+  setBackgroundPositionX: (v: number) => void;
+  backgroundPositionY: number;
+  setBackgroundPositionY: (v: number) => void;
+  uploadingLogo: boolean;
+  uploadingBackground: boolean;
+  handleLogoUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  handleBackgroundUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  logoInputRef: React.RefObject<HTMLInputElement>;
+  backgroundInputRef: React.RefObject<HTMLInputElement>;
   previewData: PromotionCardData;
 }) {
   const availableTemplates = CARD_TEMPLATES.filter(t => t.forTypes.includes(type));
@@ -503,7 +659,7 @@ function DesignCustomizationStep({
           <button
             onClick={() => setColorMode('gradient')}
             className={cn(
-              "flex-1 py-3 rounded-xl border transition-all",
+              "flex-1 py-3 rounded-xl border transition-all text-sm",
               colorMode === 'gradient'
                 ? "bg-primary/10 border-primary/50 text-primary"
                 : "bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10"
@@ -514,7 +670,7 @@ function DesignCustomizationStep({
           <button
             onClick={() => setColorMode('solid')}
             className={cn(
-              "flex-1 py-3 rounded-xl border transition-all",
+              "flex-1 py-3 rounded-xl border transition-all text-sm",
               colorMode === 'solid'
                 ? "bg-primary/10 border-primary/50 text-primary"
                 : "bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10"
@@ -522,43 +678,203 @@ function DesignCustomizationStep({
           >
             Solid
           </button>
+          <button
+            onClick={() => setColorMode('custom')}
+            className={cn(
+              "flex-1 py-3 rounded-xl border transition-all text-sm flex items-center justify-center gap-1",
+              colorMode === 'custom'
+                ? "bg-primary/10 border-primary/50 text-primary"
+                : "bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10"
+            )}
+          >
+            <Palette className="w-4 h-4" />
+            Custom
+          </button>
         </div>
       </div>
       
       {/* Color/Gradient Selection */}
       <div className="space-y-2">
-        <Label>{colorMode === 'gradient' ? 'Choose Gradient' : 'Choose Color'}</Label>
-        <div className="grid grid-cols-5 gap-2">
-          {colorMode === 'gradient' ? (
-            GRADIENTS.map(g => (
-              <button
-                key={g.id}
-                onClick={() => setGradientId(g.id)}
-                className={cn(
-                  "aspect-square rounded-xl border-2 transition-all",
-                  gradientId === g.id ? "border-primary scale-110" : "border-transparent"
-                )}
-                style={{
-                  background: `linear-gradient(${g.direction}, ${g.from}, ${g.to})`,
-                }}
-                title={g.name}
+        <Label>
+          {colorMode === 'gradient' ? 'Choose Gradient' : colorMode === 'custom' ? 'Pick Custom Color' : 'Choose Color'}
+        </Label>
+        
+        {colorMode === 'custom' ? (
+          <div className="flex items-center gap-4">
+            <input
+              type="color"
+              value={customColor}
+              onChange={(e) => setCustomColor(e.target.value)}
+              className="w-16 h-16 rounded-xl cursor-pointer border-2 border-white/20"
+            />
+            <div className="flex-1">
+              <Input
+                value={customColor}
+                onChange={(e) => setCustomColor(e.target.value)}
+                placeholder="#667eea"
+                className="h-12 rounded-xl font-mono"
               />
-            ))
-          ) : (
-            SOLID_COLORS.map(c => (
-              <button
-                key={c.id}
-                onClick={() => setPrimaryColor(c.id)}
-                className={cn(
-                  "aspect-square rounded-xl border-2 transition-all",
-                  primaryColor === c.id ? "border-primary scale-110" : "border-transparent"
-                )}
-                style={{ background: c.value }}
-                title={c.name}
-              />
-            ))
-          )}
-        </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Enter any hex color code
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-5 gap-2">
+            {colorMode === 'gradient' ? (
+              GRADIENTS.map(g => (
+                <button
+                  key={g.id}
+                  onClick={() => setGradientId(g.id)}
+                  className={cn(
+                    "aspect-square rounded-xl border-2 transition-all",
+                    gradientId === g.id ? "border-primary scale-110" : "border-transparent"
+                  )}
+                  style={{
+                    background: `linear-gradient(${g.direction}, ${g.from}, ${g.to})`,
+                  }}
+                  title={g.name}
+                />
+              ))
+            ) : (
+              SOLID_COLORS.filter(c => c.id !== 'custom').map(c => (
+                <button
+                  key={c.id}
+                  onClick={() => setPrimaryColor(c.id)}
+                  className={cn(
+                    "aspect-square rounded-xl border-2 transition-all",
+                    primaryColor === c.id ? "border-primary scale-110" : "border-transparent"
+                  )}
+                  style={{ background: c.value }}
+                  title={c.name}
+                />
+              ))
+            )}
+          </div>
+        )}
+      </div>
+      
+      {/* Logo Upload */}
+      <div className="space-y-2">
+        <Label className="flex items-center gap-2">
+          <Upload className="w-4 h-4" />
+          Brand Logo (optional)
+        </Label>
+        <input
+          ref={logoInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleLogoUpload}
+          className="hidden"
+        />
+        {logoUrl ? (
+          <div className="flex items-center gap-3 p-3 bg-black/5 dark:bg-white/5 rounded-xl">
+            <img src={logoUrl} alt="Logo" className="w-12 h-12 object-contain rounded-lg bg-white" />
+            <span className="flex-1 text-sm text-muted-foreground truncate">Logo uploaded</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setLogoUrl(null)}
+              className="shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        ) : (
+          <Button
+            variant="outline"
+            className="w-full h-12 rounded-xl"
+            onClick={() => logoInputRef.current?.click()}
+            disabled={uploadingLogo}
+          >
+            {uploadingLogo ? 'Uploading...' : 'Upload Logo'}
+          </Button>
+        )}
+      </div>
+      
+      {/* Background Image Upload */}
+      <div className="space-y-2">
+        <Label className="flex items-center gap-2">
+          <ImageIcon className="w-4 h-4" />
+          Background Image (optional)
+        </Label>
+        <input
+          ref={backgroundInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleBackgroundUpload}
+          className="hidden"
+        />
+        {backgroundImageUrl ? (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-3 bg-black/5 dark:bg-white/5 rounded-xl">
+              <img src={backgroundImageUrl} alt="Background" className="w-16 h-10 object-cover rounded-lg" />
+              <span className="flex-1 text-sm text-muted-foreground truncate">Background uploaded</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setBackgroundImageUrl(null)}
+                className="shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            {/* Background Resize Controls */}
+            <div className="space-y-4 p-4 bg-black/5 dark:bg-white/5 rounded-xl">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2 text-sm">
+                  <ZoomIn className="w-4 h-4" />
+                  Scale: {(backgroundScale * 100).toFixed(0)}%
+                </Label>
+                <Slider
+                  value={[backgroundScale]}
+                  onValueChange={([v]) => setBackgroundScale(v)}
+                  min={0.5}
+                  max={3}
+                  step={0.1}
+                  className="w-full"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2 text-sm">
+                  <Move className="w-4 h-4" />
+                  Position X: {backgroundPositionX}%
+                </Label>
+                <Slider
+                  value={[backgroundPositionX]}
+                  onValueChange={([v]) => setBackgroundPositionX(v)}
+                  min={0}
+                  max={100}
+                  step={1}
+                  className="w-full"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label className="text-sm">Position Y: {backgroundPositionY}%</Label>
+                <Slider
+                  value={[backgroundPositionY]}
+                  onValueChange={([v]) => setBackgroundPositionY(v)}
+                  min={0}
+                  max={100}
+                  step={1}
+                  className="w-full"
+                />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <Button
+            variant="outline"
+            className="w-full h-12 rounded-xl"
+            onClick={() => backgroundInputRef.current?.click()}
+            disabled={uploadingBackground}
+          >
+            {uploadingBackground ? 'Uploading...' : 'Upload Background Image'}
+          </Button>
+        )}
       </div>
       
       {/* Custom Text */}
@@ -612,6 +928,12 @@ function PreviewStep({
               }
             </span>
           </div>
+          {previewData.artistName && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Artist</span>
+              <span className="font-medium">{previewData.artistName}</span>
+            </div>
+          )}
         </div>
       </div>
       

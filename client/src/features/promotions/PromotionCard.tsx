@@ -2,9 +2,9 @@
  * PromotionCard - SSOT Virtual EFTPOS Card Component
  * 
  * Renders a promotion (voucher/discount/credit) as a virtual EFTPOS-style card.
- * Supports customizable templates, colors, gradients, and branding.
+ * Supports customizable templates, colors, gradients, branding, and artist name.
  * 
- * @version 1.0.0
+ * @version 1.1.0
  */
 
 import { cn } from "@/lib/utils";
@@ -17,6 +17,7 @@ import {
   getTemplateById,
   getTypeDefaults,
   formatPromotionValue,
+  getContrastTextColor,
 } from "./cardTemplates";
 
 export interface PromotionCardData {
@@ -32,8 +33,13 @@ export interface PromotionCardData {
   gradientFrom?: string | null;
   gradientTo?: string | null;
   customText?: string | null;
+  customColor?: string; // For custom color picker
   logoUrl?: string | null;
   backgroundImageUrl?: string | null;
+  backgroundScale?: number;
+  backgroundPositionX?: number;
+  backgroundPositionY?: number;
+  artistName?: string; // Artist name to display
   code?: string;
   status?: 'active' | 'partially_used' | 'fully_used' | 'expired' | 'revoked';
   expiresAt?: string | null;
@@ -67,14 +73,23 @@ export function PromotionCard({
   const Icon = TypeIcon[data.type];
   
   // Build background style
-  const gradientId = data.gradientFrom ? `${data.gradientFrom}_${data.gradientTo}` : null;
-  // For simplicity, use gradientFrom as the gradient ID if it matches our registry
-  const background = buildCardBackground(
+  const background = buildCardBackgroundWithPosition(
     data.gradientFrom || null,
     data.primaryColor || null,
-    data.backgroundImageUrl || null
+    data.customColor,
+    data.backgroundImageUrl || null,
+    data.backgroundScale || 1,
+    data.backgroundPositionX || 50,
+    data.backgroundPositionY || 50
   );
-  const textColor = getTextColor(data.gradientFrom, data.primaryColor);
+  
+  // Determine text color
+  let textColor: 'white' | 'black' = 'white';
+  if (data.customColor) {
+    textColor = getContrastTextColor(data.customColor);
+  } else if (!data.backgroundImageUrl) {
+    textColor = getTextColor(data.gradientFrom, data.primaryColor);
+  }
   
   // Size classes
   const sizeClasses = {
@@ -147,7 +162,7 @@ export function PromotionCard({
             src={data.logoUrl}
             alt="Logo"
             className={cn(
-              "absolute w-12 h-12 object-contain",
+              "absolute w-12 h-12 object-contain bg-white/90 rounded-lg p-1",
               template.logoPosition === 'top-left' && "top-4 left-4",
               template.logoPosition === 'top-right' && "top-4 right-4",
               template.logoPosition === 'bottom-left' && "bottom-4 left-4",
@@ -212,11 +227,35 @@ export function PromotionCard({
           )}
         </div>
         
-        {/* Code display (bottom) */}
-        {data.code && (
+        {/* Artist name - bottom right corner */}
+        {data.artistName && (
+          <div
+            className={cn(
+              "absolute bottom-3 right-4 text-xs font-medium opacity-80",
+              textColor === 'white' ? 'text-white' : 'text-black'
+            )}
+          >
+            {data.artistName}
+          </div>
+        )}
+        
+        {/* Code display (bottom center, only if no artist name or different position) */}
+        {data.code && !data.artistName && (
           <div
             className={cn(
               "absolute bottom-4 left-1/2 -translate-x-1/2 font-mono text-xs tracking-widest opacity-60",
+              textColor === 'white' ? 'text-white' : 'text-black'
+            )}
+          >
+            {data.code}
+          </div>
+        )}
+        
+        {/* Code display (bottom left if artist name is shown) */}
+        {data.code && data.artistName && (
+          <div
+            className={cn(
+              "absolute bottom-3 left-4 font-mono text-xs tracking-widest opacity-60",
               textColor === 'white' ? 'text-white' : 'text-black'
             )}
           >
@@ -242,11 +281,12 @@ export function PromotionCard({
           </div>
         )}
         
-        {/* Expiry date */}
+        {/* Expiry date - show above artist name if present */}
         {data.expiresAt && data.status === 'active' && (
           <div
             className={cn(
-              "absolute bottom-4 right-6 text-xs opacity-60",
+              "absolute text-xs opacity-60",
+              data.artistName ? "bottom-8 right-4" : "bottom-4 right-6",
               textColor === 'white' ? 'text-white' : 'text-black'
             )}
           >
@@ -256,6 +296,32 @@ export function PromotionCard({
       </div>
     </motion.div>
   );
+}
+
+/**
+ * Build card background with position controls for background images
+ */
+function buildCardBackgroundWithPosition(
+  gradientId: string | null,
+  colorId: string | null,
+  customColor: string | undefined,
+  backgroundImageUrl: string | null,
+  scale: number,
+  positionX: number,
+  positionY: number
+): string {
+  // Priority: Background image > Custom color > Gradient > Solid color
+  if (backgroundImageUrl) {
+    const scalePercent = scale * 100;
+    return `url(${backgroundImageUrl}) ${positionX}% ${positionY}% / ${scalePercent}% no-repeat`;
+  }
+  
+  if (customColor) {
+    return customColor;
+  }
+  
+  // Use the existing buildCardBackground for gradients and solid colors
+  return buildCardBackground(gradientId, colorId, null);
 }
 
 export default PromotionCard;

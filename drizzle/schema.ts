@@ -1067,6 +1067,9 @@ export const promotionTemplates = mysqlTable("promotion_templates", {
 	customText: varchar({ length: 100 }), // Custom text overlay
 	logoUrl: text(), // S3 URL for custom logo
 	backgroundImageUrl: text(), // S3 URL for background image
+	backgroundScale: decimal({ precision: 3, scale: 2 }).default('1.00'), // Scale factor for background image
+	backgroundPositionX: int().default(50), // X position percentage (0-100)
+	backgroundPositionY: int().default(50), // Y position percentage (0-100)
 	
 	// Status
 	isActive: tinyint().default(1),

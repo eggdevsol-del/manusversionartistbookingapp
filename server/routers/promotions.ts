@@ -39,8 +39,11 @@ export const promotionsRouter = router({
       gradientFrom: z.string().nullable().optional(),
       gradientTo: z.string().nullable().optional(),
       customText: z.string().max(100).nullable().optional(),
-      logoUrl: z.string().url().nullable().optional(),
-      backgroundImageUrl: z.string().url().nullable().optional(),
+      logoUrl: z.string().nullable().optional(),
+      backgroundImageUrl: z.string().nullable().optional(),
+      backgroundScale: z.number().min(0.5).max(3).optional(),
+      backgroundPositionX: z.number().min(0).max(100).optional(),
+      backgroundPositionY: z.number().min(0).max(100).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       try {
@@ -68,6 +71,9 @@ export const promotionsRouter = router({
           customText: input.customText || null,
           logoUrl: input.logoUrl || null,
           backgroundImageUrl: input.backgroundImageUrl || null,
+          backgroundScale: input.backgroundScale?.toString() || '1.00',
+          backgroundPositionX: input.backgroundPositionX || 50,
+          backgroundPositionY: input.backgroundPositionY || 50,
           isActive: 1,
         });
 
