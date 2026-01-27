@@ -506,7 +506,10 @@ export default function Chat() {
         onClose={() => setSelectedProposal(null)}
         metadata={selectedProposal?.metadata}
         isArtist={isArtist}
-        onClientAccept={handleClientAcceptProposal}
+        onAccept={(appliedPromotion) => handleClientAcceptProposal(selectedProposal?.message, appliedPromotion)}
+        onReject={() => setSelectedProposal(null)}
+        isPendingAction={false}
+        artistId={conversation?.artistId}
       />
 
       {/* Media Image Lightbox */}

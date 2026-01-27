@@ -1,11 +1,13 @@
+import { useState } from "react";
 import { format } from "date-fns";
-import { Check, Calendar as CalendarIcon, DollarSign, Clock, AlertCircle, X } from "lucide-react";
+import { Check, Calendar as CalendarIcon, DollarSign, Clock, AlertCircle, X, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogTitle } from "@/components/ui/dialog";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Card } from "@/components/ui/card";
+import { ApplyPromotionSheet } from "@/features/promotions";
 
 interface ProposalMetadata {
     type: "project_proposal";
@@ -24,9 +26,10 @@ interface ProjectProposalModalProps {
     onClose: () => void;
     metadata: ProposalMetadata | null;
     isArtist: boolean;
-    onAccept: () => void;
+    onAccept: (appliedPromotion?: { id: number; discountAmount: number; finalAmount: number }) => void;
     onReject: () => void;
     isPendingAction: boolean;
+    artistId?: string;
 }
 
 export function ProjectProposalModal({
@@ -36,11 +39,24 @@ export function ProjectProposalModal({
     isArtist,
     onAccept,
     onReject,
-    isPendingAction
+    isPendingAction,
+    artistId,
 }: ProjectProposalModalProps) {
+    const [showPromotionSheet, setShowPromotionSheet] = useState(false);
+    const [appliedPromotion, setAppliedPromotion] = useState<{
+        id: number;
+        name: string;
+        discountAmount: number;
+        finalAmount: number;
+    } | null>(null);
+
     if (!metadata) return null;
 
     const { serviceName, totalCost, sittings, dates, status, serviceDuration, depositAmount } = metadata;
+    
+    // Calculate display amounts (with promotion if applied)
+    const displayTotal = appliedPromotion ? appliedPromotion.finalAmount / 100 : totalCost;
+    const hasDiscount = appliedPromotion !== null;
 
     const dateList = Array.isArray(dates) ? dates : [];
 
@@ -99,26 +115,59 @@ export function ProjectProposalModal({
     );
 
     const ProposalActions = () => (
-        <div className="grid grid-cols-2 gap-3 w-full pt-2">
+        <div className="space-y-3 w-full pt-2">
             {!isArtist && status === 'pending' && (
                 <>
-                    <Button
-                        variant="outline"
-                        size="lg"
-                        onClick={onReject}
-                        disabled={isPendingAction}
-                        className="h-12 border-white/10 bg-white/5 hover:bg-white/10 text-foreground hover:text-foreground font-semibold rounded-xl"
-                    >
-                        Decline
-                    </Button>
-                    <Button
-                        size="lg"
-                        onClick={onAccept}
-                        disabled={isPendingAction}
-                        className="h-12 bg-primary hover:bg-primary/90 text-primary-foreground relative overflow-hidden group border-0 shadow-lg shadow-primary/20 font-semibold rounded-xl"
-                    >
-                        {isPendingAction ? "Processing..." : "Accept & Continue"}
-                    </Button>
+                    {/* Applied Promotion Display */}
+                    {appliedPromotion && (
+                        <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/20">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Tag className="w-4 h-4 text-green-500" />
+                                    <span className="text-sm font-medium text-green-500">{appliedPromotion.name} applied</span>
+                                </div>
+                                <span className="text-sm font-bold text-green-500">-${(appliedPromotion.discountAmount / 100).toFixed(2)}</span>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* Apply Promotion Button */}
+                    {!appliedPromotion && artistId && (
+                        <Button
+                            variant="outline"
+                            size="lg"
+                            onClick={() => setShowPromotionSheet(true)}
+                            className="w-full h-12 border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary hover:text-primary font-semibold rounded-xl"
+                        >
+                            <Tag className="w-4 h-4 mr-2" />
+                            Apply Voucher or Discount
+                        </Button>
+                    )}
+                    
+                    {/* Accept/Decline Buttons */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <Button
+                            variant="outline"
+                            size="lg"
+                            onClick={onReject}
+                            disabled={isPendingAction}
+                            className="h-12 border-white/10 bg-white/5 hover:bg-white/10 text-foreground hover:text-foreground font-semibold rounded-xl"
+                        >
+                            Decline
+                        </Button>
+                        <Button
+                            size="lg"
+                            onClick={() => onAccept(appliedPromotion ? {
+                                id: appliedPromotion.id,
+                                discountAmount: appliedPromotion.discountAmount,
+                                finalAmount: appliedPromotion.finalAmount,
+                            } : undefined)}
+                            disabled={isPendingAction}
+                            className="h-12 bg-primary hover:bg-primary/90 text-primary-foreground relative overflow-hidden group border-0 shadow-lg shadow-primary/20 font-semibold rounded-xl"
+                        >
+                            {isPendingAction ? "Processing..." : "Accept & Continue"}
+                        </Button>
+                    </div>
                 </>
             )}
 
@@ -189,7 +238,14 @@ export function ProjectProposalModal({
                                     <div className="w-full">
                                         <div className="flex flex-wrap items-center justify-between gap-y-4 gap-x-2">
                                             <div className="flex items-center gap-3">
-                                                <span className="text-2xl font-bold text-foreground tracking-tight">${totalCost}</span>
+                                                {hasDiscount ? (
+                                                    <>
+                                                        <span className="text-lg line-through text-muted-foreground">${totalCost}</span>
+                                                        <span className="text-2xl font-bold text-green-500 tracking-tight">${displayTotal}</span>
+                                                    </>
+                                                ) : (
+                                                    <span className="text-2xl font-bold text-foreground tracking-tight">${totalCost}</span>
+                                                )}
                                                 <span className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground self-end mb-1.5">Total</span>
                                             </div>
                                             <div className="w-px h-8 bg-white/10 hidden sm:block" />
@@ -217,6 +273,24 @@ export function ProjectProposalModal({
                     </div>
                 </DialogPrimitive.Content>
             </DialogPrimitive.Portal>
+            
+            {/* Apply Promotion Sheet */}
+            {artistId && (
+                <ApplyPromotionSheet
+                    isOpen={showPromotionSheet}
+                    onClose={() => setShowPromotionSheet(false)}
+                    artistId={artistId}
+                    originalAmount={totalCost * 100} // Convert to cents
+                    onApply={(promo, discountAmount, finalAmount) => {
+                        setAppliedPromotion({
+                            id: promo.id,
+                            name: promo.name,
+                            discountAmount,
+                            finalAmount,
+                        });
+                    }}
+                />
+            )}
         </Dialog>
     );
 }

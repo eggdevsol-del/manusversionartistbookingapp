@@ -856,10 +856,20 @@ export default function Calendar() {
               </div>
             </div>
 
-            {selectedAppointment.price && (
+            {selectedAppointment.price !== undefined && (
               <div>
                 <Label className="text-muted-foreground">Price</Label>
-                <p className="text-2xl font-bold text-primary mt-1">${selectedAppointment.price}</p>
+                {selectedAppointment.description?.includes('Promotion Applied') ? (
+                  <div className="mt-1">
+                    <p className="text-2xl font-bold text-green-500">${selectedAppointment.price}</p>
+                    <p className="text-xs text-green-500/80 mt-1 flex items-center gap-1">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500" />
+                      Promotion discount applied
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-2xl font-bold text-primary mt-1">${selectedAppointment.price}</p>
+                )}
               </div>
             )}
           </div>

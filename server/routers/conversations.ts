@@ -191,4 +191,36 @@ export const conversationsRouter = router({
                 totalCount: referenceImages.length + bodyPlacementImages.length,
             };
         }),
+
+    /**
+     * Get list of clients for the current artist
+     * Used by promotions feature to send promotions to specific clients
+     */
+    getClients: protectedProcedure
+        .query(async ({ ctx }) => {
+            if (ctx.user.role !== 'artist' && ctx.user.role !== 'admin') {
+                throw new TRPCError({ code: "FORBIDDEN", message: "Only artists can access client list" });
+            }
+
+            const convos = await db.getConversationsForUser(
+                ctx.user.id,
+                'artist'
+            );
+
+            // Get unique clients from conversations
+            const clientIds = [...new Set(convos.map(c => c.clientId))];
+            
+            const clients = await Promise.all(
+                clientIds.map(async (clientId) => {
+                    const user = await db.getUser(clientId);
+                    return user ? {
+                        id: user.id,
+                        name: user.name,
+                        email: user.email,
+                    } : null;
+                })
+            );
+
+            return clients.filter(Boolean);
+        }),
 });

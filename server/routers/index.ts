@@ -18,6 +18,7 @@ import { dashboardTasksRouter } from "./dashboardTasks";
 import { funnelRouter } from "./funnel";
 import { portfolioRouter } from "./portfolio";
 import { walletRouter } from "./wallet";
+import { promotionsRouter } from "./promotions";
 
 export const appRouter = router({
     appointments: appointmentsRouter,
@@ -38,6 +39,7 @@ export const appRouter = router({
     system: systemRouter,
     upload: uploadRouter,
     wallet: walletRouter,
+    promotions: promotionsRouter,
 });
 
 export type AppRouter = typeof appRouter;

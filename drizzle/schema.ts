@@ -1034,3 +1034,158 @@ export const leadActivityLogRelations = relations(leadActivityLog, ({ one }) => 
 		references: [users.id],
 	}),
 }));
+
+
+// ==========================================
+// PROMOTIONS SYSTEM TABLES
+// ==========================================
+
+/**
+ * Promotion Templates
+ * Artist-created templates for vouchers, discounts, and credits
+ */
+export const promotionTemplates = mysqlTable("promotion_templates", {
+	id: int().autoincrement().notNull(),
+	artistId: varchar({ length: 64 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+	
+	// Template type
+	type: mysqlEnum(['voucher', 'discount', 'credit']).notNull(),
+	
+	// Display info
+	name: varchar({ length: 255 }).notNull(),
+	description: text(),
+	
+	// Value configuration
+	valueType: mysqlEnum(['fixed', 'percentage']).default('fixed').notNull(),
+	value: int().notNull(), // Amount in cents for fixed, percentage for percentage type
+	
+	// Design customization
+	templateDesign: varchar({ length: 50 }).default('classic').notNull(), // References SSOT template registry
+	primaryColor: varchar({ length: 50 }), // Color key from palette
+	gradientFrom: varchar({ length: 50 }), // Gradient start color key
+	gradientTo: varchar({ length: 50 }), // Gradient end color key
+	customText: varchar({ length: 100 }), // Custom text overlay
+	logoUrl: text(), // S3 URL for custom logo
+	backgroundImageUrl: text(), // S3 URL for background image
+	
+	// Status
+	isActive: tinyint().default(1),
+	
+	createdAt: timestamp({ mode: 'string' }).default(sql`(now())`),
+	updatedAt: timestamp({ mode: 'string' }).default(sql`(now())`),
+}, (table) => [
+	primaryKey({ columns: [table.id], name: "promotion_templates_id" }),
+	index("idx_artist_templates").on(table.artistId, table.type),
+]);
+
+/**
+ * Issued Promotions
+ * Individual promotions issued to clients (instances of templates)
+ */
+export const issuedPromotions = mysqlTable("issued_promotions", {
+	id: int().autoincrement().notNull(),
+	templateId: int().notNull().references(() => promotionTemplates.id, { onDelete: "cascade" }),
+	artistId: varchar({ length: 64 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+	clientId: varchar({ length: 64 }).references(() => users.id, { onDelete: "cascade" }), // Null for auto-apply promotions
+	
+	// Unique code for redemption
+	code: varchar({ length: 32 }).notNull(),
+	
+	// Value at time of issue (snapshot from template)
+	type: mysqlEnum(['voucher', 'discount', 'credit']).notNull(),
+	valueType: mysqlEnum(['fixed', 'percentage']).default('fixed').notNull(),
+	originalValue: int().notNull(), // Original value when issued
+	remainingValue: int().notNull(), // Remaining value (for partial redemptions)
+	
+	// Auto-apply settings
+	isAutoApply: tinyint().default(0),
+	autoApplyStartDate: datetime({ mode: 'string' }),
+	autoApplyEndDate: datetime({ mode: 'string' }),
+	
+	// Status
+	status: mysqlEnum(['active', 'partially_used', 'fully_used', 'expired', 'revoked']).default('active').notNull(),
+	
+	// Redemption tracking
+	redeemedAt: timestamp({ mode: 'string' }),
+	redeemedOnAppointmentId: int().references(() => appointments.id, { onDelete: "set null" }),
+	
+	// Validity
+	expiresAt: datetime({ mode: 'string' }),
+	
+	createdAt: timestamp({ mode: 'string' }).default(sql`(now())`),
+	updatedAt: timestamp({ mode: 'string' }).default(sql`(now())`),
+}, (table) => [
+	primaryKey({ columns: [table.id], name: "issued_promotions_id" }),
+	unique("issued_promotions_code").on(table.code),
+	index("idx_client_promotions").on(table.clientId, table.status),
+	index("idx_artist_promotions").on(table.artistId, table.status),
+	index("idx_auto_apply").on(table.isAutoApply, table.autoApplyStartDate, table.autoApplyEndDate),
+]);
+
+/**
+ * Promotion Redemptions
+ * Track partial or full redemptions of promotions
+ */
+export const promotionRedemptions = mysqlTable("promotion_redemptions", {
+	id: int().autoincrement().notNull(),
+	promotionId: int().notNull().references(() => issuedPromotions.id, { onDelete: "cascade" }),
+	appointmentId: int().notNull().references(() => appointments.id, { onDelete: "cascade" }),
+	
+	// Amount redeemed in this transaction
+	amountRedeemed: int().notNull(), // In cents
+	
+	// Original booking amount before discount
+	originalAmount: int().notNull(),
+	// Final amount after discount
+	finalAmount: int().notNull(),
+	
+	createdAt: timestamp({ mode: 'string' }).default(sql`(now())`),
+}, (table) => [
+	primaryKey({ columns: [table.id], name: "promotion_redemptions_id" }),
+	index("idx_promotion_redemptions").on(table.promotionId),
+	index("idx_appointment_redemptions").on(table.appointmentId),
+]);
+
+// Type exports for promotion tables
+export type InsertPromotionTemplate = InferInsertModel<typeof promotionTemplates>;
+export type SelectPromotionTemplate = InferSelectModel<typeof promotionTemplates>;
+export type InsertIssuedPromotion = InferInsertModel<typeof issuedPromotions>;
+export type SelectIssuedPromotion = InferSelectModel<typeof issuedPromotions>;
+export type InsertPromotionRedemption = InferInsertModel<typeof promotionRedemptions>;
+export type SelectPromotionRedemption = InferSelectModel<typeof promotionRedemptions>;
+
+// Relations for promotion tables
+export const promotionTemplatesRelations = relations(promotionTemplates, ({ one, many }) => ({
+	artist: one(users, {
+		fields: [promotionTemplates.artistId],
+		references: [users.id],
+	}),
+	issuedPromotions: many(issuedPromotions),
+}));
+
+export const issuedPromotionsRelations = relations(issuedPromotions, ({ one, many }) => ({
+	template: one(promotionTemplates, {
+		fields: [issuedPromotions.templateId],
+		references: [promotionTemplates.id],
+	}),
+	artist: one(users, {
+		fields: [issuedPromotions.artistId],
+		references: [users.id],
+	}),
+	client: one(users, {
+		fields: [issuedPromotions.clientId],
+		references: [users.id],
+	}),
+	redemptions: many(promotionRedemptions),
+}));
+
+export const promotionRedemptionsRelations = relations(promotionRedemptions, ({ one }) => ({
+	promotion: one(issuedPromotions, {
+		fields: [promotionRedemptions.promotionId],
+		references: [issuedPromotions.id],
+	}),
+	appointment: one(appointments, {
+		fields: [promotionRedemptions.appointmentId],
+		references: [appointments.id],
+	}),
+}));

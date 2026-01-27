@@ -319,7 +319,12 @@ export function useChatController(conversationId: number) {
         toast.success("Dates confirmed!");
     }, [clientConfirmMessageId, clientConfirmMetadata, clientConfirmDates, conversationId, sendMessageMutation.mutate, setShowClientConfirmDialog, scrollToBottom]);
 
-    const handleClientAcceptProposal = useCallback((message: any, metadata: any) => {
+    const redeemPromotionMutation = trpc.promotions.redeemPromotion.useMutation();
+
+    const handleClientAcceptProposal = useCallback((message: any, appliedPromotion?: { id: number; discountAmount: number; finalAmount: number }) => {
+        const metadata = selectedProposal?.metadata;
+        if (!metadata) return;
+        
         if (!metadata.proposedDates && !metadata.dates) return;
         const bookingDates = metadata.dates || metadata.proposedDates || [];
 
@@ -327,6 +332,11 @@ export function useChatController(conversationId: number) {
             toast.error("No dates found in proposal");
             return;
         }
+
+        // Calculate price - use promotion final amount if applied, otherwise original
+        const finalPrice = appliedPromotion 
+            ? appliedPromotion.finalAmount / 100 // Convert cents to dollars
+            : metadata.price || 0;
 
         const appointments = bookingDates.map((dateStr: string) => {
             const startTime = new Date(dateStr);
@@ -336,9 +346,11 @@ export function useChatController(conversationId: number) {
                 startTime,
                 endTime: new Date(startTime.getTime() + duration * 60 * 1000),
                 title: metadata.serviceName,
-                description: "Project Booking (Client Accepted)",
+                description: appliedPromotion 
+                    ? `Project Booking (Client Accepted - Promotion Applied: -$${(appliedPromotion.discountAmount / 100).toFixed(2)})`
+                    : "Project Booking (Client Accepted)",
                 serviceName: metadata.serviceName,
-                price: metadata.price || 0,
+                price: finalPrice,
                 depositAmount: 0
             };
         });
@@ -347,14 +359,33 @@ export function useChatController(conversationId: number) {
             conversationId,
             appointments
         }, {
-            onSuccess: () => {
+            onSuccess: async (result) => {
+                // If promotion was applied, redeem it on the first appointment
+                if (appliedPromotion && result?.appointmentIds?.[0]) {
+                    try {
+                        await redeemPromotionMutation.mutateAsync({
+                            promotionId: appliedPromotion.id,
+                            appointmentId: result.appointmentIds[0],
+                            originalAmount: (metadata.price || 0) * 100, // Convert to cents
+                        });
+                        console.log('[handleClientAcceptProposal] Promotion redeemed successfully');
+                    } catch (error) {
+                        console.error('[handleClientAcceptProposal] Failed to redeem promotion:', error);
+                    }
+                }
+
                 const newMetadata = JSON.stringify({
                     ...metadata,
-                    status: 'accepted'
+                    status: 'accepted',
+                    appliedPromotion: appliedPromotion ? {
+                        id: appliedPromotion.id,
+                        discountAmount: appliedPromotion.discountAmount,
+                        finalAmount: appliedPromotion.finalAmount,
+                    } : undefined,
                 });
 
                 updateMetadataMutation.mutate({
-                    messageId: message.id,
+                    messageId: message?.id || selectedProposal?.message?.id,
                     metadata: newMetadata
                 });
 
@@ -362,14 +393,18 @@ export function useChatController(conversationId: number) {
                 scrollToBottom('smooth');
                 setSelectedProposal(null); // Close modal on success
 
+                const acceptMessage = appliedPromotion
+                    ? `I accept the project proposal for ${metadata.serviceName}. (Promotion applied: -$${(appliedPromotion.discountAmount / 100).toFixed(2)})`
+                    : `I accept the project proposal for ${metadata.serviceName}.`;
+
                 sendMessageMutation.mutate({
                     conversationId,
-                    content: `I accept the project proposal for ${metadata.serviceName}.`,
+                    content: acceptMessage,
                     messageType: "text"
                 });
             }
         });
-    }, [conversationId, bookProjectMutation.mutate, updateMetadataMutation.mutate, sendMessageMutation.mutate, scrollToBottom]);
+    }, [conversationId, selectedProposal, bookProjectMutation.mutate, updateMetadataMutation.mutate, sendMessageMutation.mutate, redeemPromotionMutation, scrollToBottom]);
 
     const handleViewProposal = useCallback((message: any, metadata: any) => {
         setSelectedProposal({ message, metadata });

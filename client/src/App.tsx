@@ -15,8 +15,8 @@ import Calendar from "./pages/Calendar";
 import Settings from "./pages/Settings";
 import Conversations from "./pages/Conversations";
 import Dashboard from "./pages/Dashboard";
-import Portfolio from "./pages/Portfolio";
-import Wallet from "./pages/Wallet";
+// Portfolio page removed - replaced by Promotions
+import Promotions from "./pages/Promotions";
 
 import Consultations from "./pages/Consultations";
 import Policies from "./pages/Policies";
@@ -58,9 +58,8 @@ function Router() {
         <Route path="/calendar" component={Calendar} />
 
         <Route path="/dashboard" component={Dashboard} />
-        <Route path="/portfolio" component={Portfolio} />
-        <Route path="/explore" component={Portfolio} />
-        <Route path="/wallet" component={Wallet} />
+        {/* Portfolio routes removed */}
+        <Route path="/promotions" component={Promotions} />
 
         <Route path="/settings" component={Settings} />
         <Route path="/consultations" component={Consultations} />
