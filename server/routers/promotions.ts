@@ -454,6 +454,95 @@ export const promotionsRouter = router({
     }),
 
   /**
+   * Update auto-apply settings for a template
+   */
+  updateAutoApply: protectedProcedure
+    .input(z.object({
+      templateId: z.number(),
+      isAutoApply: z.boolean(),
+      startDate: z.string().optional(),
+      endDate: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        if (ctx.user.role !== 'artist' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Only artists can update auto-apply settings" });
+        }
+
+        const db = await getDb();
+        if (!db) {
+          console.error('[promotions.updateAutoApply] Database connection failed');
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database connection failed" });
+        }
+
+        // Get template
+        const template = await db.query.promotionTemplates.findFirst({
+          where: and(
+            eq(schema.promotionTemplates.id, input.templateId),
+            eq(schema.promotionTemplates.artistId, ctx.user.id)
+          ),
+        });
+
+        if (!template) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Template not found" });
+        }
+
+        if (input.isAutoApply) {
+          // Check if auto-apply rule already exists
+          const existingRule = await db.query.issuedPromotions.findFirst({
+            where: and(
+              eq(schema.issuedPromotions.templateId, input.templateId),
+              eq(schema.issuedPromotions.isAutoApply, 1),
+              eq(schema.issuedPromotions.status, 'active')
+            ),
+          });
+
+          if (existingRule) {
+            // Update existing rule
+            await db.update(schema.issuedPromotions)
+              .set({
+                autoApplyStartDate: input.startDate || null,
+                autoApplyEndDate: input.endDate || null,
+              })
+              .where(eq(schema.issuedPromotions.id, existingRule.id));
+          } else {
+            // Create new auto-apply rule
+            const code = `AUTO-${randomBytes(4).toString('hex').toUpperCase()}`;
+            await db.insert(schema.issuedPromotions).values({
+              templateId: input.templateId,
+              artistId: ctx.user.id,
+              clientId: null,
+              code,
+              type: template.type,
+              valueType: template.valueType,
+              originalValue: template.value,
+              remainingValue: template.value,
+              isAutoApply: 1,
+              autoApplyStartDate: input.startDate || null,
+              autoApplyEndDate: input.endDate || null,
+              status: 'active',
+            });
+          }
+        } else {
+          // Disable auto-apply by revoking the rule
+          await db.update(schema.issuedPromotions)
+            .set({ status: 'revoked' })
+            .where(and(
+              eq(schema.issuedPromotions.templateId, input.templateId),
+              eq(schema.issuedPromotions.isAutoApply, 1),
+              eq(schema.issuedPromotions.status, 'active')
+            ));
+        }
+
+        console.log(`[promotions.updateAutoApply] Updated auto-apply for template ${input.templateId}: ${input.isAutoApply}`);
+        return { success: true };
+      } catch (error) {
+        console.error('[promotions.updateAutoApply] Error:', error);
+        throw error;
+      }
+    }),
+
+  /**
    * Delete a promotion template
    */
   deleteTemplate: protectedProcedure

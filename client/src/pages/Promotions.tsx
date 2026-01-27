@@ -6,14 +6,14 @@
  * 
  * Features stacked virtual EFTPOS card display with selection animation.
  * 
- * @version 1.0.0
+ * @version 1.0.1
  */
 
 import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { PageShell, PageHeader, GlassSheet, FullScreenSheet } from "@/components/ui/ssot";
 import { Button } from "@/components/ui/button";
-import { Plus, Gift, Percent, CreditCard, Send, Calendar, Users } from "lucide-react";
+import { Plus, Gift, Percent, CreditCard, Send, Calendar, Users, Check, Info } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { 
@@ -26,6 +26,7 @@ import {
   SendPromotionSheet,
 } from "@/features/promotions";
 import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 
 // Tab configuration
 const TABS = [
@@ -42,9 +43,10 @@ export default function Promotions() {
   const [selectedCardId, setSelectedCardId] = useState<number | null>(null);
   const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [showSendSheet, setShowSendSheet] = useState(false);
+  const [showAutoApplySheet, setShowAutoApplySheet] = useState(false);
   
   // Fetch promotions based on role
-  const { data: promotions, isLoading } = trpc.promotions.getPromotions.useQuery(
+  const { data: promotions, isLoading, refetch } = trpc.promotions.getPromotions.useQuery(
     { type: activeTab },
     { enabled: !!user }
   );
@@ -56,6 +58,25 @@ export default function Promotions() {
   // Handle card selection
   const handleCardClick = (cardId: number) => {
     setSelectedCardId(prev => prev === cardId ? null : cardId);
+  };
+
+  // Handle client using promotion on booking
+  const handleUseOnBooking = () => {
+    if (!selectedCard) return;
+    
+    // Store the selected promotion in sessionStorage for use in booking flow
+    sessionStorage.setItem('pendingPromotion', JSON.stringify({
+      id: selectedCard.id,
+      type: selectedCard.type,
+      name: selectedCard.name,
+      value: selectedCard.value || selectedCard.originalValue,
+      valueType: selectedCard.valueType,
+      code: selectedCard.code,
+    }));
+    
+    toast.success('Promotion ready to use!', {
+      description: 'This will be applied to your next booking acceptance.',
+    });
   };
   
   return (
@@ -191,23 +212,46 @@ export default function Promotions() {
                   <Button
                     variant="outline"
                     className="w-full h-12 rounded-xl"
-                    onClick={() => {/* TODO: Open auto-apply sheet */}}
+                    onClick={() => setShowAutoApplySheet(true)}
                   >
                     <Calendar className="w-4 h-4 mr-2" />
                     Auto-Apply to New Clients
                   </Button>
                 </>
               ) : (
-                <Button
-                  className="w-full h-14 rounded-xl font-bold text-base"
-                  disabled={selectedCard.status !== 'active'}
-                >
-                  Use on Next Booking
-                </Button>
+                <>
+                  <Button
+                    className="w-full h-14 rounded-xl font-bold text-base"
+                    disabled={selectedCard.status !== 'active'}
+                    onClick={handleUseOnBooking}
+                  >
+                    <Check className="w-5 h-5 mr-2" />
+                    Use on Next Booking
+                  </Button>
+                  {selectedCard.status !== 'active' && (
+                    <p className="text-sm text-muted-foreground text-center flex items-center justify-center gap-2">
+                      <Info className="w-4 h-4" />
+                      This promotion has already been used
+                    </p>
+                  )}
+                </>
               )}
             </motion.div>
           )}
         </AnimatePresence>
+        
+        {/* Create New Button - Always visible for artists */}
+        {isArtist && (
+          <div className="sticky bottom-24 left-0 right-0 px-4 pt-6 pb-2 mt-8 bg-gradient-to-t from-card via-card to-transparent">
+            <Button
+              className="w-full h-14 rounded-2xl font-bold text-base shadow-lg"
+              onClick={() => setShowCreateWizard(true)}
+            >
+              <Plus className="w-5 h-5 mr-2" />
+              Create New {activeTab === 'voucher' ? 'Voucher' : activeTab === 'discount' ? 'Discount' : 'Credit'}
+            </Button>
+          </div>
+        )}
         
         {/* Spacer for bottom nav */}
         <div className="h-32" />
@@ -217,7 +261,10 @@ export default function Promotions() {
       {showCreateWizard && (
         <CreatePromotionWizard
           isOpen={showCreateWizard}
-          onClose={() => setShowCreateWizard(false)}
+          onClose={() => {
+            setShowCreateWizard(false);
+            refetch();
+          }}
           defaultType={activeTab}
         />
       )}
@@ -228,6 +275,19 @@ export default function Promotions() {
           isOpen={showSendSheet}
           onClose={() => setShowSendSheet(false)}
           promotion={selectedCard as PromotionCardData}
+        />
+      )}
+      
+      {/* Auto-Apply Settings Sheet */}
+      {showAutoApplySheet && selectedCard && (
+        <AutoApplySheet
+          isOpen={showAutoApplySheet}
+          onClose={() => setShowAutoApplySheet(false)}
+          promotion={selectedCard as PromotionCardData}
+          onSave={() => {
+            setShowAutoApplySheet(false);
+            refetch();
+          }}
         />
       )}
     </PageShell>
@@ -271,4 +331,120 @@ function EmptyState({
   );
 }
 
-// CreatePromotionWizard and SendPromotionSheet are now imported from @/features/promotions
+// Auto-Apply Settings Sheet
+function AutoApplySheet({
+  isOpen,
+  onClose,
+  promotion,
+  onSave,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  promotion: PromotionCardData;
+  onSave: () => void;
+}) {
+  const [isAutoApply, setIsAutoApply] = useState(promotion.isAutoApply || false);
+  const [startDate, setStartDate] = useState(
+    promotion.autoApplyStartDate 
+      ? new Date(promotion.autoApplyStartDate).toISOString().split('T')[0]
+      : new Date().toISOString().split('T')[0]
+  );
+  const [endDate, setEndDate] = useState(
+    promotion.autoApplyEndDate
+      ? new Date(promotion.autoApplyEndDate).toISOString().split('T')[0]
+      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  );
+  
+  const updateAutoApply = trpc.promotions.updateAutoApply.useMutation({
+    onSuccess: () => {
+      toast.success('Auto-apply settings saved');
+      onSave();
+    },
+    onError: (error) => {
+      toast.error('Failed to save settings', { description: error.message });
+    },
+  });
+  
+  const handleSave = () => {
+    updateAutoApply.mutate({
+      templateId: promotion.id,
+      isAutoApply,
+      startDate: isAutoApply ? startDate : undefined,
+      endDate: isAutoApply ? endDate : undefined,
+    });
+  };
+  
+  return (
+    <FullScreenSheet
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Auto-Apply Settings"
+    >
+      <div className="p-6 space-y-6">
+        {/* Toggle */}
+        <div className="flex items-center justify-between p-4 bg-black/5 dark:bg-white/5 rounded-xl">
+          <div>
+            <p className="font-medium text-foreground">Auto-apply to new clients</p>
+            <p className="text-sm text-muted-foreground">
+              Automatically give this promotion to new signups
+            </p>
+          </div>
+          <button
+            onClick={() => setIsAutoApply(!isAutoApply)}
+            className={cn(
+              "w-14 h-8 rounded-full transition-colors relative",
+              isAutoApply ? "bg-primary" : "bg-gray-300 dark:bg-gray-600"
+            )}
+          >
+            <div
+              className={cn(
+                "absolute top-1 w-6 h-6 rounded-full bg-white shadow transition-transform",
+                isAutoApply ? "translate-x-7" : "translate-x-1"
+              )}
+            />
+          </button>
+        </div>
+        
+        {/* Date Range */}
+        {isAutoApply && (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Start Date
+              </label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full p-3 rounded-xl border border-border bg-background text-foreground"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                End Date
+              </label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full p-3 rounded-xl border border-border bg-background text-foreground"
+              />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              New clients who sign up between these dates will automatically receive this promotion.
+            </p>
+          </div>
+        )}
+        
+        {/* Save Button */}
+        <Button
+          className="w-full h-14 rounded-xl font-bold"
+          onClick={handleSave}
+          disabled={updateAutoApply.isPending}
+        >
+          {updateAutoApply.isPending ? 'Saving...' : 'Save Settings'}
+        </Button>
+      </div>
+    </FullScreenSheet>
+  );
+}
