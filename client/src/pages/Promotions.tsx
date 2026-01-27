@@ -240,8 +240,8 @@ export default function Promotions() {
           )}
         </AnimatePresence>
         
-        {/* Create New Button - Always visible for artists */}
-        {isArtist && (
+        {/* Create New Button - Only visible for artists when no card is selected */}
+        {isArtist && !selectedCardId && (
           <div className="sticky bottom-24 left-0 right-0 px-4 pt-6 pb-2 mt-8 bg-gradient-to-t from-card via-card to-transparent">
             <Button
               className="w-full h-14 rounded-2xl font-bold text-base shadow-lg"
