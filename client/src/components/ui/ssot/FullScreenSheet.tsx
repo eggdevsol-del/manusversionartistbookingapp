@@ -128,13 +128,15 @@ export function FullScreenSheet({
                     </div>
 
                     {/* 3. Glass Sheet Container */}
-                    <div className="flex-1 z-20 flex flex-col bg-card backdrop-blur-2xl rounded-t-[2.5rem] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.02)] overflow-hidden relative">
+                    <div className="flex-1 z-20 flex flex-col dark:bg-card backdrop-blur-2xl rounded-t-[2.5rem] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.02)] overflow-hidden relative">
+                        {/* Light mode background gradient overlay (matches wrapper gradient at 90% opacity) */}
+                        <div className="absolute inset-0 bg-gradient-to-br from-slate-100/90 via-purple-50/90 to-cyan-50/90 dark:hidden pointer-events-none" />
                         {/* Top Edge Highlight */}
-                        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-l from-white/20 to-transparent opacity-50 pointer-events-none" />
+                        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-l from-white/20 to-transparent opacity-50 pointer-events-none z-10" />
 
                         {/* Scrollable Content */}
                         <div className={cn(
-                            "flex-1 w-full h-full px-4 pt-8 overflow-y-auto mobile-scroll touch-pan-y",
+                            "relative z-10 flex-1 w-full h-full px-4 pt-8 overflow-y-auto mobile-scroll touch-pan-y",
                             className
                         )}>
                             <div className="pb-32 max-w-lg mx-auto">

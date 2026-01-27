@@ -20,7 +20,7 @@ import {
 import { BottomSheet, LoadingState, PageShell, PageHeader, GlassSheet } from "@/components/ui/ssot";
 import { DialogTitle } from "@/components/ui/dialog";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -278,7 +278,8 @@ export default function Calendar() {
     return days;
   };
 
-  const getMonthDays = () => {
+  // Memoize month days to prevent re-renders causing visual glitches
+  const monthDays = useMemo(() => {
     const firstDay = new Date(
       currentDate.getFullYear(),
       currentDate.getMonth(),
@@ -290,22 +291,29 @@ export default function Calendar() {
       0
     );
 
+    // getDay() returns 0 for Sunday, which is correct for our S M T W T F S layout
     const startDay = firstDay.getDay();
     const daysInMonth = lastDay.getDate();
 
-    const days = [];
+    const days: Date[] = [];
+    
+    // Add days from previous month to fill the first row
     for (let i = 0; i < startDay; i++) {
       const date = new Date(firstDay);
       date.setDate(date.getDate() - (startDay - i));
       days.push(date);
     }
 
+    // Add all days of the current month
     for (let i = 1; i <= daysInMonth; i++) {
       days.push(new Date(currentDate.getFullYear(), currentDate.getMonth(), i));
     }
 
     return days;
-  };
+  }, [currentDate]);
+
+  // Keep getMonthDays for backward compatibility but use memoized value
+  const getMonthDays = () => monthDays;
 
   const getAppointmentsForDate = (date: Date) => {
     if (!appointments) return [];
@@ -529,19 +537,21 @@ export default function Calendar() {
               </div>
             ) : (
               <div className="grid grid-cols-7 gap-2">
-                {["S", "M", "T", "W", "T", "F", "S"].map((day) => (
+                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, idx) => (
                   <div
-                    key={day}
+                    key={`day-header-${idx}`}
                     className="text-center text-xs font-bold text-muted-foreground/60 py-2 uppercase"
                   >
-                    {day}
+                    {day.charAt(0)}
                   </div>
                 ))}
                 {getMonthDays().map((day, index) => {
                   const dayAppointments = getAppointmentsForDate(day);
+                  // Use a stable key based on the actual date to prevent rendering issues
+                  const dateKey = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
                   return (
                     <Card
-                      key={index}
+                      key={dateKey}
                       className={cn(
                         "aspect-square p-1 cursor-pointer transition-colors border-0 bg-white/5 hover:bg-white/10 rounded-xl relative overflow-hidden",
                         isToday(day) ? "ring-1 ring-primary bg-primary/10" : "",

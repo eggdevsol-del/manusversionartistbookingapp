@@ -377,6 +377,11 @@ export function useChatController(conversationId: number) {
                 const newMetadata = JSON.stringify({
                     ...metadata,
                     status: 'accepted',
+                    // Store discount info in a format the modal can display
+                    discountApplied: !!appliedPromotion,
+                    discountAmount: appliedPromotion?.discountAmount,
+                    finalAmount: appliedPromotion?.finalAmount,
+                    promotionName: appliedPromotion ? 'Promotion' : undefined,
                     appliedPromotion: appliedPromotion ? {
                         id: appliedPromotion.id,
                         discountAmount: appliedPromotion.discountAmount,

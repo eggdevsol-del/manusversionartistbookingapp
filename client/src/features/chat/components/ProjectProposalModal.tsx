@@ -19,6 +19,11 @@ interface ProposalMetadata {
     serviceDuration?: number;
     depositAmount?: number;
     policies?: string[]; // Assuming policies might be passed or valid defaults
+    // Discount info (stored when accepted with promotion)
+    discountApplied?: boolean;
+    discountAmount?: number; // in cents
+    finalAmount?: number; // in cents
+    promotionName?: string;
 }
 
 interface ProjectProposalModalProps {
@@ -52,11 +57,28 @@ export function ProjectProposalModal({
 
     if (!metadata) return null;
 
-    const { serviceName, totalCost, sittings, dates, status, serviceDuration, depositAmount } = metadata;
+    const { serviceName, totalCost, sittings, dates, status, serviceDuration, depositAmount, discountApplied, discountAmount: storedDiscountAmount, finalAmount: storedFinalAmount, promotionName } = metadata;
     
-    // Calculate display amounts (with promotion if applied)
-    const displayTotal = appliedPromotion ? appliedPromotion.finalAmount / 100 : totalCost;
-    const hasDiscount = appliedPromotion !== null;
+    // Calculate display amounts (with promotion if applied - either from current session or stored from acceptance)
+    const hasStoredDiscount = discountApplied && storedFinalAmount !== undefined;
+    const hasCurrentDiscount = appliedPromotion !== null;
+    const hasDiscount = hasCurrentDiscount || hasStoredDiscount;
+    
+    const displayTotal = hasCurrentDiscount 
+        ? appliedPromotion.finalAmount / 100 
+        : hasStoredDiscount 
+            ? storedFinalAmount / 100 
+            : totalCost;
+    
+    const displayDiscountAmount = hasCurrentDiscount 
+        ? appliedPromotion.discountAmount / 100 
+        : hasStoredDiscount 
+            ? (storedDiscountAmount || 0) / 100 
+            : 0;
+    
+    const displayPromotionName = hasCurrentDiscount 
+        ? appliedPromotion.name 
+        : promotionName || 'Promotion';
 
     const dateList = Array.isArray(dates) ? dates : [];
 
@@ -187,10 +209,23 @@ export function ProjectProposalModal({
             )}
 
             {status === 'accepted' && (
-                <div className="col-span-2 p-4 rounded-xl bg-green-500/10 border border-green-500/20 text-center">
-                    <p className="text-green-500 font-bold flex items-center justify-center gap-2">
-                        <Check className="w-5 h-5" /> Proposal Accepted
-                    </p>
+                <div className="col-span-2 space-y-2">
+                    {hasStoredDiscount && (
+                        <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/20">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <Tag className="w-4 h-4 text-green-500" />
+                                    <span className="text-sm font-medium text-green-500">{displayPromotionName} applied</span>
+                                </div>
+                                <span className="text-sm font-bold text-green-500">-${displayDiscountAmount.toFixed(2)}</span>
+                            </div>
+                        </div>
+                    )}
+                    <div className="p-4 rounded-xl bg-green-500/10 border border-green-500/20 text-center">
+                        <p className="text-green-500 font-bold flex items-center justify-center gap-2">
+                            <Check className="w-5 h-5" /> Proposal Accepted
+                        </p>
+                    </div>
                 </div>
             )}
 
